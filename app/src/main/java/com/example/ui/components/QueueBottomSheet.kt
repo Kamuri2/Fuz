@@ -133,10 +133,10 @@ fun QueueBottomSheet(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .fillMaxHeight(0.65f)
                         .padding(horizontal = 20.dp)
                 ) {
-                    // The user requested to show maximum 12 songs
-                    val visibleQueue = queue.drop(currentIndex).take(12)
+                    val visibleQueue = queue.drop(currentIndex)
                     itemsIndexed(
                         items = visibleQueue,
                         key = { index, track -> "${track.id}_${index + currentIndex}" }

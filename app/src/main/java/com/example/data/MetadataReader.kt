@@ -200,14 +200,29 @@ object MetadataReader {
     }
 
     private fun findLyricsInTag(tag: Tag): String {
-        // 1. First priority: Look for synchronized lyrics fields specifically
+        // 1. Standard JAudioTagger Lyrics Key (USLT/LYRICS/etc depending on format)
+        try {
+            val standardLyrics = tag.getFirst(FieldKey.LYRICS)
+            if (!standardLyrics.isNullOrBlank()) {
+                val cleaned = cleanExtractedLyrics(standardLyrics)
+                if (cleaned.isNotBlank()) {
+                    if (cleaned.contains(Regex("\\[\\d{1,2}:\\d{2}"))) {
+                        return cleaned // Synchronized!
+                    }
+                    // Keep looking for synchronized, but save this as fallback
+                }
+            }
+        } catch (e: Exception) {}
+
+        // 2. First priority: Look for synchronized lyrics fields specifically
         val syncedCandidateKeys = listOf(
+            "SYLT",
+            "USLT",
             "SYNCEDLYRICS",
             "SYNCED LYRICS",
             "TXXX:SYNCEDLYRICS",
             "TXXX:SYNCED LYRICS",
             "TXXX:LRC",
-            "SYLT",
             "LYRICS_SYNCED",
             "----:com.apple.iTunes:SYNCEDLYRICS"
         )
@@ -222,14 +237,19 @@ object MetadataReader {
             } catch (e: Exception) {}
         }
 
-        // 2. Iterate ALL fields in the tag to find any lyrics (including custom and Vorbis/ID3/MP4 tags)
+        // 3. Iterate ALL fields in the tag to find any lyrics (including custom and Vorbis/ID3/MP4 tags)
         try {
             val iterator = tag.fields
             var fallbackUnsynced = ""
             while (iterator.hasNext()) {
                 val field = iterator.next()
                 val id = (field.id ?: "").uppercase()
-                val strVal = field.toString()
+                // Use .toString() but clean it if jaudiotagger wraps it like 'Text="value"'
+                var strVal = field.toString()
+                if (strVal.startsWith("Text=\"") && strVal.endsWith("\"")) {
+                    strVal = strVal.substring(6, strVal.length - 1)
+                }
+
                 if (id.contains("LYRIC") || id.contains("LRC") || id.contains("SYLT") || id.contains("USLT") || id.contains("TEXT") || id.contains("©LYR")) {
                     val cleaned = cleanExtractedLyrics(strVal)
                     if (cleaned.isNotBlank()) {
@@ -243,6 +263,14 @@ object MetadataReader {
                     }
                 }
             }
+            
+            // Try Standard again if we found nothing
+            val standard = tag.getFirst(FieldKey.LYRICS)
+            if (!standard.isNullOrBlank()) {
+                val cleaned = cleanExtractedLyrics(standard)
+                if (cleaned.isNotBlank()) return cleaned
+            }
+
             if (fallbackUnsynced.isNotBlank()) {
                 return fallbackUnsynced
             }

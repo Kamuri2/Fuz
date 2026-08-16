@@ -613,53 +613,46 @@ fun PlayerScreen(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        if (!showLyricsMode) {
-                            // Enlarged and lowered Square Album Art
-                            Box(
-                                modifier = Modifier
-                                    .padding(top = 8.dp)
-                                    .fillMaxWidth(0.96f)
-                                    .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(Color(0x1AFFFFFF)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                when {
-                                    artworkBitmap != null -> {
-                                        Image(
-                                            bitmap = artworkBitmap!!,
-                                            contentDescription = targetTrack?.title,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                    targetTrack?.albumArtUri != null -> {
-                                        AsyncImage(
-                                            model = targetTrack.albumArtUri,
-                                            contentDescription = targetTrack.title,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                    else -> {
-                                        Icon(
-                                            imageVector = Icons.Default.MusicNote,
-                                            contentDescription = null,
-                                            tint = Color.Gray,
-                                            modifier = Modifier.size(96.dp)
-                                        )
+                        // 1:1 Square Area containing Album Art OR Full Lyrics, with Action Buttons overlaid at bottom
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 8.dp)
+                                .fillMaxWidth(0.96f)
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0x1AFFFFFF))
+                        ) {
+                            if (!showLyricsMode) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    when {
+                                        artworkBitmap != null -> {
+                                            Image(
+                                                bitmap = artworkBitmap!!,
+                                                contentDescription = targetTrack?.title,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                        targetTrack?.albumArtUri != null -> {
+                                            AsyncImage(
+                                                model = targetTrack.albumArtUri,
+                                                contentDescription = targetTrack.title,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                        else -> {
+                                            Icon(
+                                                imageVector = Icons.Default.MusicNote,
+                                                contentDescription = null,
+                                                tint = Color.Gray,
+                                                modifier = Modifier.size(96.dp)
+                                            )
+                                        }
                                     }
                                 }
-                            }
-                        } else {
-                            // Full Synced Lyrics Display in Portrait
-                            Box(
-                                modifier = Modifier
-                                    .padding(top = 8.dp)
-                                    .fillMaxWidth(0.96f)
-                                    .aspectRatio(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            } else {
+                                // Full Synced Lyrics Display in Portrait
                                 LyricsContent(
                                     parsedLyrics = parsedLyrics,
                                     rawLyrics = targetTrack?.lyrics ?: "",
@@ -668,6 +661,74 @@ fun PlayerScreen(
                                     onSeek = onSeek,
                                     modifier = Modifier.fillMaxSize()
                                 )
+                            }
+
+                            // Action Icons Row overlaid at the bottom of the 1:1 area
+                            Row(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .background(
+                                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
+                                        )
+                                    )
+                                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = onFavoriteToggle, modifier = Modifier.testTag("player_favorite_btn")) {
+                                    Icon(
+                                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                        contentDescription = "Favorite",
+                                        tint = if (isFavorite) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+
+                                IconButton(onClick = onDislikeToggle) {
+                                    Icon(
+                                        imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
+                                        contentDescription = "Dislike",
+                                        tint = if (isDisliked) Color(0xFFEF4444) else Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+
+                                IconButton(onClick = { showAddToPlaylistModal = true }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Add to playlist",
+                                        tint = Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+
+                                // Lyrics Mic Icon Toggle
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(if (showLyricsMode) Color.White.copy(alpha = 0.35f) else Color.Transparent)
+                                        .clickable { showLyricsMode = !showLyricsMode },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mic,
+                                        contentDescription = "Lyrics",
+                                        tint = if (showLyricsMode) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+
+                                IconButton(onClick = onOpenQueue, modifier = Modifier.testTag("player_queue_btn")) {
+                                    Icon(
+                                        imageVector = Icons.Default.QueueMusic,
+                                        contentDescription = "Queue",
+                                        tint = Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             }
                         }
 
@@ -709,66 +770,6 @@ fun PlayerScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                        }
-
-                        // Action Icons Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(0.88f),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = onFavoriteToggle, modifier = Modifier.testTag("player_favorite_btn")) {
-                                Icon(
-                                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                    contentDescription = "Favorite",
-                                    tint = if (isFavorite) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-
-                            IconButton(onClick = onDislikeToggle) {
-                                Icon(
-                                    imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
-                                    contentDescription = "Dislike",
-                                    tint = if (isDisliked) Color(0xFFEF4444) else Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-
-                            IconButton(onClick = { showAddToPlaylistModal = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Add to playlist",
-                                    tint = Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-
-                            // Lyrics Mic Icon Toggle
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape)
-                                    .background(if (showLyricsMode) Color.White.copy(alpha = 0.25f) else Color.Transparent)
-                                    .clickable { showLyricsMode = !showLyricsMode },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Mic,
-                                    contentDescription = "Lyrics",
-                                    tint = if (showLyricsMode) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-
-                            IconButton(onClick = onOpenQueue, modifier = Modifier.testTag("player_queue_btn")) {
-                                Icon(
-                                    imageVector = Icons.Default.QueueMusic,
-                                    contentDescription = "Queue",
-                                    tint = Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
                         }
                     }
                 }
