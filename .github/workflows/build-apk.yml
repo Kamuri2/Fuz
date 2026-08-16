@@ -21,27 +21,29 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '21'
-        cache: 'gradle'
 
-    - name: Set up Android SDK
-      uses: android-actions/setup-android@v3
-
-    - name: Accept Android SDK Licenses
-      run: yes | sdkmanager --licenses || true
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
 
     - name: Make Gradlew Executable
-      run: chmod +x ./gradlew
+      run: |
+        chmod +x ./gradlew || true
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-    - name: Locate APK
       run: |
-        find . -name "*.apk"
-        mkdir -p ./apk_output
-        cp $(find app/build/outputs/apk -name "*.apk" | head -n 1) ./apk_output/player-app-debug.apk || true
+        if [ -f "./gradlew" ]; then
+          ./gradlew assembleDebug --no-daemon --stacktrace
+        else
+          gradle assembleDebug --no-daemon --stacktrace
+        fi
 
-    - name: Upload APK
+    - name: Prepare APK Output
+      run: |
+        mkdir -p ./apk_output
+        find app/build/outputs/apk -name "*.apk" -exec cp {} ./apk_output/player-app-debug.apk \; || true
+        ls -la ./apk_output
+
+    - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: Player-Audio-APK
