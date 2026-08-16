@@ -147,6 +147,14 @@ object MetadataReader {
                 extractedLyrics = searchSidecarLyrics(track.path)
             }
 
+            // 4. Fallback a API de Internet (LrcLib) si no hay letras locales
+            if (extractedLyrics.isBlank()) {
+                val fetched = LrcLibHelper.fetchLyrics(title, artist)
+                if (fetched != null) {
+                    extractedLyrics = fetched
+                }
+            }
+
             val finalLyrics = if (extractedLyrics.isNotBlank()) extractedLyrics else track.lyrics
 
             track.copy(

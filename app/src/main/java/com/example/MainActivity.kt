@@ -334,7 +334,15 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
             exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
             modifier = Modifier.fillMaxSize()
         ) {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) {}
+            ) {
                 PlayerScreen(
                     settings = appSettings,
                     currentTrack = currentTrack,

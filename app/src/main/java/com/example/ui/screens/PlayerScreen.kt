@@ -188,12 +188,24 @@ fun PlayerScreen(
     LiquidGlassBackground(isPlaying = isPlaying, currentTrack = currentTrack, modifier = modifier) {
         if (isLandscape) {
             // ==================== LANDSCAPE MODE ====================
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp).testTag("close_player_landscape")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Deslizar para cerrar",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                 // LEFT SIDE: Cover, Title, Artist - Album, and Actions
                 Column(
                     modifier = Modifier
@@ -336,6 +348,63 @@ fun PlayerScreen(
                             verticalArrangement = Arrangement.SpaceEvenly,
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
+                            // Main Playback Controls Row (Rewind 10s, Previous, Big Play/Pause, Next, Forward 10s)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = { onSeek((currentPositionMs - 10000L).coerceAtLeast(0L)) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.FastRewind,
+                                        contentDescription = "Rewind 10s",
+                                        tint = Color.White.copy(alpha = 0.75f),
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
+                                IconButton(onClick = { slideDirection = -1; onPrevious() }) {
+                                    Icon(
+                                        imageVector = Icons.Default.SkipPrevious,
+                                        contentDescription = "Previous",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                }
+                                // Prominent Play/Pause Button
+                                Box(
+                                    modifier = Modifier
+                                        .size(68.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White)
+                                        .clickable { onPlayPauseToggle() }
+                                        .testTag("player_main_play_btn"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "Play/Pause",
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(42.dp)
+                                    )
+                                }
+                                IconButton(onClick = { slideDirection = 1; onNext() }) {
+                                    Icon(
+                                        imageVector = Icons.Default.SkipNext,
+                                        contentDescription = "Next",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                }
+                                IconButton(onClick = { onSeek(currentPositionMs + 10000L) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.FastForward,
+                                        contentDescription = "Forward 10s",
+                                        tint = Color.White.copy(alpha = 0.75f),
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
+                            }
+
                             // Progress bar & Timestamps
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Row(
@@ -355,7 +424,6 @@ fun PlayerScreen(
                                         color = GlassTextMuted
                                     )
                                 }
-
                                 Slider(
                                     value = if (durationMs > 0) currentPositionMs.toFloat() / durationMs.toFloat() else 0f,
                                     onValueChange = { fraction -> onSeek((fraction * durationMs).toLong()) },
@@ -366,67 +434,6 @@ fun PlayerScreen(
                                     ),
                                     modifier = Modifier.fillMaxWidth()
                                 )
-                            }
-
-                            // Main Playback Controls Row (Rewind 10s, Previous, Big Play/Pause, Next, Forward 10s)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(onClick = { onSeek((currentPositionMs - 10000L).coerceAtLeast(0L)) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.FastRewind,
-                                        contentDescription = "Rewind 10s",
-                                        tint = Color.White.copy(alpha = 0.75f),
-                                        modifier = Modifier.size(30.dp)
-                                    )
-                                }
-
-                                IconButton(onClick = { slideDirection = -1; onPrevious() }) {
-                                    Icon(
-                                        imageVector = Icons.Default.SkipPrevious,
-                                        contentDescription = "Previous",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                }
-
-                                // Prominent Play/Pause Button
-                                Box(
-                                    modifier = Modifier
-                                        .size(68.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White)
-                                        .clickable { onPlayPauseToggle() }
-                                        .testTag("player_main_play_btn"),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = "Play/Pause",
-                                        tint = Color.Black,
-                                        modifier = Modifier.size(42.dp)
-                                    )
-                                }
-
-                                IconButton(onClick = { slideDirection = 1; onNext() }) {
-                                    Icon(
-                                        imageVector = Icons.Default.SkipNext,
-                                        contentDescription = "Next",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                }
-
-                                IconButton(onClick = { onSeek(currentPositionMs + 10000L) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.FastForward,
-                                        contentDescription = "Forward 10s",
-                                        tint = Color.White.copy(alpha = 0.75f),
-                                        modifier = Modifier.size(30.dp)
-                                    )
-                                }
                             }
 
                             // Format Badge
@@ -546,6 +553,7 @@ fun PlayerScreen(
                     }
                 }
             }
+            }
         } else {
             // ==================== PORTRAIT MODE ====================
             Column(
@@ -579,6 +587,10 @@ fun PlayerScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .clickable { onBack() },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
