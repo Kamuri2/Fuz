@@ -97,7 +97,12 @@ fun AlbumsScreen(
     }
 
     if (selectedAlbum != null) {
-        val albumTracks = (albumGroups[selectedAlbum] ?: emptyList()).sortedBy { it.trackNumber }
+        val albumTracks = (albumGroups[selectedAlbum] ?: emptyList()).sortedWith(
+            compareBy(
+                { if (it.trackNumber > 0) it.trackNumber else Int.MAX_VALUE },
+                { it.title.lowercase() }
+            )
+        )
         AlbumDetailScreen(
             albumName = selectedAlbum!!,
             tracks = albumTracks,
@@ -334,11 +339,11 @@ fun AlbumDetailScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${index + 1}",
+                    text = if (track.trackNumber > 0) "${track.trackNumber}" else "${index + 1}",
                     color = GlassTextMuted,
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(32.dp)
+                    modifier = Modifier.width(36.dp)
                 )
                 
                 Column(modifier = Modifier.weight(1f)) {

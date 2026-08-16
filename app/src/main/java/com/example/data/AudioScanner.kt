@@ -73,7 +73,8 @@ object AudioScanner {
                     val sizeBytes = cursor.getLong(sizeColumn)
                     val path = if (dataColumn >= 0) cursor.getString(dataColumn) ?: "" else ""
                     val year = if (yearColumn >= 0) cursor.getInt(yearColumn) else 2024
-                    val trackNum = if (trackNumColumn >= 0) cursor.getInt(trackNumColumn) else 1
+                    val rawTrackNum = if (trackNumColumn >= 0) cursor.getInt(trackNumColumn) else 0
+                    val trackNum = if (rawTrackNum >= 1000) rawTrackNum % 1000 else if (rawTrackNum > 0) rawTrackNum else 1
 
                     val contentUri = ContentUris.withAppendedId(collection, id)
                     val artUri = ContentUris.withAppendedId(artworkUriBase, albumId)
@@ -83,6 +84,24 @@ object AudioScanner {
                     } else "Music"
 
                     val sizeMb = String.format("%.1f MB", sizeBytes / (1024.0 * 1024.0))
+
+                    var lyrics = ""
+                    if (path.isNotBlank()) {
+                        try {
+                            val audioFile = File(path)
+                            if (audioFile.exists()) {
+                                val parent = audioFile.parentFile
+                                val baseName = audioFile.nameWithoutExtension
+                                val lrc = File(parent, "$baseName.lrc")
+                                val txt = File(parent, "$baseName.txt")
+                                if (lrc.exists() && lrc.canRead()) {
+                                    lyrics = lrc.readText(Charsets.UTF_8).trim()
+                                } else if (txt.exists() && txt.canRead()) {
+                                    lyrics = txt.readText(Charsets.UTF_8).trim()
+                                }
+                            }
+                        } catch (e: Exception) {}
+                    }
 
                     val rawTrack = Track(
                         id = id,
@@ -97,7 +116,7 @@ object AudioScanner {
                         fileSizeFormatted = sizeMb,
                         path = path,
                         folderName = folderName,
-                        lyrics = ""
+                        lyrics = lyrics
                     )
 
                     tracks.add(rawTrack)
