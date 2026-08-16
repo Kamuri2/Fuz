@@ -29,7 +29,9 @@ jobs:
       run: yes | sdkmanager --licenses || true
 
     - name: Generate Gradle Wrapper
-      run: gradle wrapper
+      run: |
+        gradle wrapper --gradle-version 9.3.1
+        chmod +x ./gradlew
 
     - name: Generate Debug Keystore
       run: |
