@@ -31,6 +31,11 @@ jobs:
     - name: Generate Gradle Wrapper
       run: gradle wrapper
 
+    - name: Generate Debug Keystore
+      run: |
+        keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
+        touch .env
+
     - name: Build Debug APK
       run: ./gradlew assembleDebug --no-daemon --stacktrace
 
