@@ -150,12 +150,8 @@ fun PlayerScreen(
 
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
 
-    LaunchedEffect(currentTrack?.path) {
-        artworkBitmap = null
-    }
-
-    LaunchedEffect(currentTrack?.path, isPlaying) {
-        if (isPlaying && currentTrack?.albumArtBytes != null && artworkBitmap == null) {
+    LaunchedEffect(currentTrack?.id, currentTrack?.albumArtBytes) {
+        if (currentTrack?.albumArtBytes != null) {
             withContext(Dispatchers.IO) {
                 try {
                     val bytes = currentTrack.albumArtBytes
@@ -169,6 +165,8 @@ fun PlayerScreen(
                     e.printStackTrace()
                 }
             }
+        } else {
+            artworkBitmap = null
         }
     }
 
@@ -611,18 +609,19 @@ fun PlayerScreen(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.SpaceEvenly
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // 1:1 Square Area containing Album Art OR Full Lyrics, with Action Buttons overlaid at bottom
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 8.dp)
-                                .fillMaxWidth(0.96f)
-                                .aspectRatio(1f)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0x1AFFFFFF))
-                        ) {
-                            if (!showLyricsMode) {
+                        if (!showLyricsMode) {
+                            // ==================== ALBUM ART MODE ====================
+                            // 1:1 Square Album Art Area with Action Buttons overlaid at bottom
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 4.dp)
+                                    .fillMaxWidth(0.96f)
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Color(0x1AFFFFFF))
+                            ) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     when {
                                         artworkBitmap != null -> {
@@ -651,29 +650,113 @@ fun PlayerScreen(
                                         }
                                     }
                                 }
-                            } else {
-                                // Full Synced Lyrics Display in Portrait
+
+                                // Action Icons Row overlaid at the bottom of the album art
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .background(
+                                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
+                                            )
+                                        )
+                                        .padding(vertical = 10.dp, horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(onClick = onFavoriteToggle, modifier = Modifier.testTag("player_favorite_btn")) {
+                                        Icon(
+                                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                            contentDescription = "Favorite",
+                                            tint = if (isFavorite) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.85f),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+
+                                    IconButton(onClick = onDislikeToggle) {
+                                        Icon(
+                                            imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
+                                            contentDescription = "Dislike",
+                                            tint = if (isDisliked) Color(0xFFEF4444) else Color.White.copy(alpha = 0.85f),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+
+                                    IconButton(onClick = { showAddToPlaylistModal = true }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = "Add to playlist",
+                                            tint = Color.White.copy(alpha = 0.85f),
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+
+                                    // Lyrics Mic Icon Toggle
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(CircleShape)
+                                            .background(if (showLyricsMode) Color.White.copy(alpha = 0.35f) else Color.Transparent)
+                                            .clickable { showLyricsMode = !showLyricsMode },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Mic,
+                                            contentDescription = "Lyrics",
+                                            tint = if (showLyricsMode) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.85f),
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+
+                                    IconButton(onClick = onOpenQueue, modifier = Modifier.testTag("player_queue_btn")) {
+                                        Icon(
+                                            imageVector = Icons.Default.QueueMusic,
+                                            contentDescription = "Queue",
+                                            tint = Color.White.copy(alpha = 0.85f),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Live Synchronized Lyrics snippet below the album art
+                            LiveSyncedLyricSnippet(
+                                parsedLyrics = parsedLyrics,
+                                rawLyrics = targetTrack?.lyrics ?: "",
+                                currentPositionMs = currentPositionMs,
+                                onClick = { showLyricsMode = !showLyricsMode },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 36.dp, max = 50.dp)
+                                    .padding(top = 2.dp, bottom = 2.dp)
+                            )
+                        } else {
+                            // ==================== LYRICS VIEW MODE ====================
+                            // Cover is hidden! Full lyrics view occupies the center stage
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 4.dp, bottom = 4.dp)
+                                    .fillMaxWidth(0.96f)
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Color(0x14FFFFFF))
+                            ) {
                                 LyricsContent(
                                     parsedLyrics = parsedLyrics,
                                     rawLyrics = targetTrack?.lyrics ?: "",
                                     currentPositionMs = currentPositionMs,
                                     language = settings.appLanguage,
                                     onSeek = onSeek,
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier.fillMaxSize().padding(8.dp)
                                 )
                             }
 
-                            // Action Icons Row overlaid at the bottom of the 1:1 area
+                            // Action Icons Row below lyrics so user can toggle back anytime
                             Row(
                                 modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .background(
-                                        androidx.compose.ui.graphics.Brush.verticalGradient(
-                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
-                                        )
-                                    )
-                                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                                    .fillMaxWidth(0.96f)
+                                    .padding(vertical = 4.dp, horizontal = 12.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -704,19 +787,19 @@ fun PlayerScreen(
                                     )
                                 }
 
-                                // Lyrics Mic Icon Toggle
+                                // Active Lyrics Mic Icon
                                 Box(
                                     modifier = Modifier
                                         .size(42.dp)
                                         .clip(CircleShape)
-                                        .background(if (showLyricsMode) Color.White.copy(alpha = 0.35f) else Color.Transparent)
+                                        .background(Color(0xFFFF5C00).copy(alpha = 0.25f))
                                         .clickable { showLyricsMode = !showLyricsMode },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Mic,
                                         contentDescription = "Lyrics",
-                                        tint = if (showLyricsMode) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.85f),
+                                        tint = Color(0xFFFF5C00),
                                         modifier = Modifier.size(22.dp)
                                     )
                                 }
@@ -732,28 +815,14 @@ fun PlayerScreen(
                             }
                         }
 
-                        // Live Synchronized Lyrics that are playing right now!
-                        if (!showLyricsMode) {
-                            LiveSyncedLyricSnippet(
-                                parsedLyrics = parsedLyrics,
-                                rawLyrics = targetTrack?.lyrics ?: "",
-                                currentPositionMs = currentPositionMs,
-                                onClick = { showLyricsMode = !showLyricsMode },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 40.dp, max = 54.dp)
-                                    .padding(top = 4.dp, bottom = 4.dp)
-                            )
-                        }
-
                         // Title and Artist Centered
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(top = 4.dp)
+                            modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
                         ) {
                             Text(
                                 text = targetTrack?.title ?: "",
-                                fontSize = 24.sp,
+                                fontSize = 23.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White,
                                 textAlign = TextAlign.Center,
@@ -774,8 +843,8 @@ fun PlayerScreen(
                     }
                 }
 
-                // Progress Bar & Duration Labels
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                // Progress Bar & Duration Labels (Tightly attached right below Title)
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 0.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -795,8 +864,6 @@ fun PlayerScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-
-                Spacer(modifier = Modifier.height(2.dp))
 
                 // Main Playback Controls
                 Row(
@@ -856,7 +923,7 @@ fun PlayerScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(10.dp))
             }
         }
 
@@ -1013,29 +1080,44 @@ fun LyricsContent(
         if (rawLyrics.isNotBlank()) {
             val scrollState = rememberScrollState()
             Column(
-                modifier = modifier.verticalScroll(scrollState),
+                modifier = modifier
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
                     text = rawLyrics,
-                    fontSize = 16.sp,
+                    fontSize = 17.sp,
+                    lineHeight = 26.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         } else {
             Box(modifier = modifier, contentAlignment = Alignment.Center) {
-                Text(
-                    text = com.example.ui.Translations.get(language, "lyrics_not_available"),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White.copy(alpha = 0.6f),
-                    letterSpacing = 1.sp,
-                    textAlign = TextAlign.Center
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.35f),
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = com.example.ui.Translations.get(language, "lyrics_not_available"),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White.copy(alpha = 0.6f),
+                        letterSpacing = 0.5.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     } else {
@@ -1046,28 +1128,32 @@ fun LyricsContent(
 
         LaunchedEffect(activeIndex) {
             if (activeIndex >= 0) {
-                listState.animateScrollToItem((activeIndex - 1).coerceAtLeast(0))
+                val targetIndex = (activeIndex - 2).coerceAtLeast(0)
+                listState.animateScrollToItem(targetIndex)
             }
         }
 
         LazyColumn(
             state = listState,
             modifier = modifier,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 48.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             itemsIndexed(items = parsedLyrics) { idx, line ->
                 val isActive = idx == activeIndex
                 Text(
                     text = line.text,
-                    fontSize = if (isActive) 20.sp else 15.sp,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isActive) Color.White else Color.White.copy(alpha = 0.4f),
+                    fontSize = if (isActive) 21.sp else 16.sp,
+                    lineHeight = if (isActive) 28.sp else 22.sp,
+                    fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
+                    color = if (isActive) Color(0xFFFF9E66) else Color.White.copy(alpha = 0.4f),
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { onSeek(line.timeMs) }
-                        .padding(horizontal = 8.dp)
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
                 )
             }
         }

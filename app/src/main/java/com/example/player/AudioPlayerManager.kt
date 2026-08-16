@@ -362,6 +362,11 @@ class AudioPlayerManager private constructor(private val context: Context) {
                 if (_currentIndex.value == index) {
                     _currentTrack.value = enriched
                 }
+                val currentPlaylist = _playlist.value.toMutableList()
+                if (index in currentPlaylist.indices && currentPlaylist[index].id == track.id) {
+                    currentPlaylist[index] = enriched
+                    _playlist.value = currentPlaylist
+                }
                 if (enriched.lyrics.isNotBlank()) {
                     com.example.data.TrackRepository.updateTrackLyrics(context, track.id, enriched.lyrics)
                 }

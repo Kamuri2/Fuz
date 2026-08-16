@@ -4,15 +4,16 @@ import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import com.example.model.Track
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import org.jaudiotagger.tag.Tag
+import org.jaudiotagger.tag.TagTextField
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
-import java.nio.charset.Charset
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -34,11 +35,11 @@ object MetadataReader {
                 Log.d(TAG, "MediaMetadataRetriever setDataSource error: ${e.message}")
             }
 
-            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+            var title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
                 ?.takeIf { it.isNotBlank() } ?: track.title
-            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+            var artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
                 ?.takeIf { it.isNotBlank() } ?: track.artist
-            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+            var album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
                 ?.takeIf { it.isNotBlank() } ?: track.album
             val yearStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
             val year = yearStr?.toIntOrNull() ?: track.year
@@ -88,7 +89,7 @@ object MetadataReader {
                 if (targetFile == null) {
                     try {
                         context.contentResolver.openInputStream(track.contentUri)?.use { input ->
-                            val suffix = getExtensionFromTrack(track)
+                            val suffix = getExtensionFromTrack(context, track)
                             val cacheFile = File.createTempFile("tag_scan_", suffix, context.cacheDir)
                             FileOutputStream(cacheFile).use { output ->
                                 input.copyTo(output)
@@ -106,6 +107,20 @@ object MetadataReader {
                     val tag = audioFile.tag
                     
                     if (tag != null) {
+                        // Title / Artist / Album fallback from tag if retriever was empty or unknown
+                        val tagTitle = tag.getFirst(FieldKey.TITLE)
+                        if (!tagTitle.isNullOrBlank() && (title.isBlank() || isGenericName(title))) {
+                            title = tagTitle.trim()
+                        }
+                        val tagArtist = tag.getFirst(FieldKey.ARTIST)
+                        if (!tagArtist.isNullOrBlank() && (artist.isBlank() || isGenericName(artist))) {
+                            artist = tagArtist.trim()
+                        }
+                        val tagAlbum = tag.getFirst(FieldKey.ALBUM)
+                        if (!tagAlbum.isNullOrBlank() && (album.isBlank() || isGenericName(album))) {
+                            album = tagAlbum.trim()
+                        }
+
                         // Extraer número de pista de los metadatos si no se obtuvo antes
                         val tagTrack = tag.getFirst(FieldKey.TRACK)
                         if (!tagTrack.isNullOrBlank()) {
@@ -149,7 +164,12 @@ object MetadataReader {
 
             // 4. Fallback a API de Internet (LrcLib) si no hay letras locales
             if (extractedLyrics.isBlank()) {
-                val fetched = LrcLibHelper.fetchLyrics(title, artist)
+                val fetched = LrcLibHelper.fetchLyrics(
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    durationSec = durationMs / 1000
+                )
                 if (fetched != null) {
                     extractedLyrics = fetched
                 }
@@ -161,17 +181,17 @@ object MetadataReader {
                 title = title,
                 artist = artist,
                 album = album,
-                year = year,
+                durationMs = durationMs,
                 trackNumber = trackNumber,
+                year = year,
                 genre = genre,
                 bitrate = bitrate,
                 sampleRate = sampleRate,
-                durationMs = durationMs,
                 albumArtBytes = artworkBytes,
                 lyrics = finalLyrics
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Error extracting metadata for ${track.title}: ${e.message}")
+            Log.e(TAG, "Error in extractFullMetadata: ${e.message}", e)
             track
         } finally {
             try {
@@ -181,6 +201,11 @@ object MetadataReader {
                 tempCacheFile?.delete()
             } catch (e: Exception) {}
         }
+    }
+
+    private fun isGenericName(str: String): Boolean {
+        val s = str.trim().lowercase()
+        return s.isEmpty() || s == "unknown" || s == "unknown artist" || s == "unknown track" || s == "unknown album" || s == "<unknown>" || s == "artista desconocido"
     }
 
     private fun parseTrackNumber(raw: String?): Int? {
@@ -200,119 +225,106 @@ object MetadataReader {
     }
 
     private fun findLyricsInTag(tag: Tag): String {
-        // 1. Standard JAudioTagger Lyrics Key (USLT/LYRICS/etc depending on format)
+        var fallbackUnsynced = ""
+
+        // 1. Direct standard field check via FieldKey
         try {
-            val standardLyrics = tag.getFirst(FieldKey.LYRICS)
-            if (!standardLyrics.isNullOrBlank()) {
-                val cleaned = cleanExtractedLyrics(standardLyrics)
-                if (cleaned.isNotBlank()) {
-                    if (cleaned.contains(Regex("\\[\\d{1,2}:\\d{2}"))) {
-                        return cleaned // Synchronized!
+            val stdList = tag.getAll(FieldKey.LYRICS)
+            for (lyr in stdList) {
+                if (!lyr.isNullOrBlank()) {
+                    val clean = cleanExtractedLyrics(lyr)
+                    if (clean.isNotBlank()) {
+                        if (clean.contains(Regex("\\[\\d{1,2}:\\d{2}"))) {
+                            return clean // Synchronized!
+                        }
+                        if (fallbackUnsynced.isBlank()) {
+                            fallbackUnsynced = clean
+                        }
                     }
-                    // Keep looking for synchronized, but save this as fallback
                 }
             }
         } catch (e: Exception) {}
 
-        // 2. First priority: Look for synchronized lyrics fields specifically
-        val syncedCandidateKeys = listOf(
-            "SYLT",
-            "USLT",
-            "SYNCEDLYRICS",
-            "SYNCED LYRICS",
-            "TXXX:SYNCEDLYRICS",
-            "TXXX:SYNCED LYRICS",
-            "TXXX:LRC",
-            "LYRICS_SYNCED",
-            "----:com.apple.iTunes:SYNCEDLYRICS"
-        )
-
-        for (key in syncedCandidateKeys) {
-            try {
-                val value = tag.getFirst(key)
-                if (!value.isNullOrBlank()) {
-                    val cleaned = cleanExtractedLyrics(value)
-                    if (cleaned.isNotBlank()) return cleaned
-                }
-            } catch (e: Exception) {}
-        }
-
-        // 3. Iterate ALL fields in the tag to find any lyrics (including custom and Vorbis/ID3/MP4 tags)
+        // 2. Iterate ALL fields in the tag
         try {
             val iterator = tag.fields
-            var fallbackUnsynced = ""
             while (iterator.hasNext()) {
                 val field = iterator.next()
                 val id = (field.id ?: "").uppercase()
-                // Use .toString() but clean it if jaudiotagger wraps it like 'Text="value"'
-                var strVal = field.toString()
-                if (strVal.startsWith("Text=\"") && strVal.endsWith("\"")) {
-                    strVal = strVal.substring(6, strVal.length - 1)
+                
+                var content = ""
+                if (field is TagTextField) {
+                    content = field.content ?: ""
+                }
+                if (content.isBlank()) {
+                    content = extractTextFromRawField(field.toString())
                 }
 
-                if (id.contains("LYRIC") || id.contains("LRC") || id.contains("SYLT") || id.contains("USLT") || id.contains("TEXT") || id.contains("©LYR")) {
-                    val cleaned = cleanExtractedLyrics(strVal)
-                    if (cleaned.isNotBlank()) {
-                        // If it contains timestamp pattern [00:00], it is synced! Return immediately
-                        if (cleaned.contains(Regex("\\[\\d{1,2}:\\d{2}"))) {
-                            return cleaned
-                        }
-                        if (fallbackUnsynced.isBlank()) {
-                            fallbackUnsynced = cleaned
+                if (content.isNotBlank()) {
+                    // Check if field is lyrics-related or contains timestamp lyrics
+                    val isLyricField = id.contains("LYRIC") || id.contains("LRC") || id.contains("SYLT") || 
+                                       id.contains("USLT") || id.contains("TEXT") || id.contains("©LYR") ||
+                                       id.contains("TXXX") || id.contains("COMM")
+
+                    val hasSyncedTimestamps = content.contains(Regex("\\[\\d{1,2}:\\d{2}"))
+
+                    if (isLyricField || hasSyncedTimestamps) {
+                        val cleaned = cleanExtractedLyrics(content)
+                        if (cleaned.isNotBlank()) {
+                            if (hasSyncedTimestamps) {
+                                return cleaned // Return immediately if synchronized
+                            }
+                            if (fallbackUnsynced.isBlank()) {
+                                fallbackUnsynced = cleaned
+                            }
                         }
                     }
                 }
             }
-            
-            // Try Standard again if we found nothing
-            val standard = tag.getFirst(FieldKey.LYRICS)
-            if (!standard.isNullOrBlank()) {
-                val cleaned = cleanExtractedLyrics(standard)
-                if (cleaned.isNotBlank()) return cleaned
-            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Error iterating fields: ${e.message}")
+        }
 
-            if (fallbackUnsynced.isNotBlank()) {
-                return fallbackUnsynced
-            }
-        } catch (e: Exception) {}
-
-        // 3. Fallback candidates for unsynchronized lyrics
-        val unsyncedCandidateKeys = listOf(
-            "UNSYNCEDLYRICS",
-            "UNSYNCED LYRICS",
-            "TXXX:UNSYNCEDLYRICS",
-            "TXXX:UNSYNCED LYRICS",
-            "TXXX:LYRICS",
-            "TXXX:Lyrics",
-            "LYRICS",
-            "Lyrics",
-            "©lyr",
-            "TEXT",
-            "COMM:Lyrics",
-            "ULTRASTAR",
-            "----:com.apple.iTunes:LYRICS"
+        // 3. Fallback candidate keys lookup
+        val candidateKeys = listOf(
+            "SYNCEDLYRICS", "SYNCED LYRICS", "TXXX:SYNCEDLYRICS", "TXXX:SYNCED LYRICS",
+            "TXXX:LRC", "LYRICS_SYNCED", "USLT", "UNSYNCEDLYRICS", "UNSYNCED LYRICS",
+            "TXXX:UNSYNCEDLYRICS", "TXXX:LYRICS", "LYRICS", "Lyrics", "©lyr", "TEXT",
+            "----:com.apple.iTunes:SYNCEDLYRICS", "----:com.apple.iTunes:LYRICS"
         )
 
-        for (key in unsyncedCandidateKeys) {
+        for (key in candidateKeys) {
             try {
                 val value = tag.getFirst(key)
                 if (!value.isNullOrBlank()) {
-                    val cleaned = cleanExtractedLyrics(value)
-                    if (cleaned.isNotBlank()) return cleaned
+                    val clean = cleanExtractedLyrics(value)
+                    if (clean.isNotBlank()) {
+                        if (clean.contains(Regex("\\[\\d{1,2}:\\d{2}"))) return clean
+                        if (fallbackUnsynced.isBlank()) fallbackUnsynced = clean
+                    }
                 }
             } catch (e: Exception) {}
         }
 
-        // 4. Intento con FieldKey estándar
-        try {
-            val stdLyrics = tag.getFirst(FieldKey.LYRICS)
-            if (!stdLyrics.isNullOrBlank()) {
-                val cleaned = cleanExtractedLyrics(stdLyrics)
-                if (cleaned.isNotBlank()) return cleaned
-            }
-        } catch (e: Exception) {}
+        return fallbackUnsynced
+    }
 
-        return ""
+    private fun extractTextFromRawField(raw: String): String {
+        var s = raw.trim()
+        if (s.contains("Text=\"")) {
+            val start = s.indexOf("Text=\"") + 6
+            val end = s.lastIndexOf("\"")
+            if (end > start) {
+                s = s.substring(start, end)
+            }
+        } else if (s.contains("Lyrics=\"")) {
+            val start = s.indexOf("Lyrics=\"") + 8
+            val end = s.lastIndexOf("\"")
+            if (end > start) {
+                s = s.substring(start, end)
+            }
+        }
+        return s.replace("\\n", "\n").replace("\\r", "").replace("\\t", "\t")
     }
 
     private fun searchSidecarLyrics(audioPath: String): String {
@@ -327,7 +339,8 @@ object MetadataReader {
                 if (f.isFile) {
                     val fName = f.name.lowercase()
                     val fBase = f.nameWithoutExtension.lowercase()
-                    if ((fBase == nameWithoutExt) && (fName.endsWith(".lrc") || fName.endsWith(".txt"))) {
+                    if ((fBase == nameWithoutExt || fName == "$nameWithoutExt.lrc" || fName == "$nameWithoutExt.txt") &&
+                        (fName.endsWith(".lrc") || fName.endsWith(".txt"))) {
                         val text = readFileWithCharsetDetection(f)
                         if (text.isNotBlank()) return text.trim()
                     }
@@ -360,9 +373,9 @@ object MetadataReader {
         }
     }
 
-    private fun getExtensionFromTrack(track: Track): String {
+    private fun getExtensionFromTrack(context: Context, track: Track): String {
         val path = track.path.lowercase()
-        return when {
+        val fromPath = when {
             path.endsWith(".mp3") -> ".mp3"
             path.endsWith(".flac") -> ".flac"
             path.endsWith(".m4a") -> ".m4a"
@@ -370,8 +383,25 @@ object MetadataReader {
             path.endsWith(".ogg") -> ".ogg"
             path.endsWith(".opus") -> ".opus"
             path.endsWith(".aac") -> ".aac"
-            else -> ".mp3"
+            else -> ""
         }
+        if (fromPath.isNotEmpty()) return fromPath
+
+        // Try getting mime type from ContentResolver
+        try {
+            val mime = context.contentResolver.getType(track.contentUri)?.lowercase() ?: ""
+            return when {
+                mime.contains("flac") -> ".flac"
+                mime.contains("mp4") || mime.contains("m4a") || mime.contains("aac") -> ".m4a"
+                mime.contains("ogg") -> ".ogg"
+                mime.contains("opus") -> ".opus"
+                mime.contains("wav") -> ".wav"
+                mime.contains("mpeg") || mime.contains("mp3") -> ".mp3"
+                else -> ".mp3"
+            }
+        } catch (e: Exception) {}
+
+        return ".mp3"
     }
 
     /**
@@ -384,7 +414,7 @@ object MetadataReader {
         // Si el tag incrustado viene con separador de JAudioTagger (ej. "eng||[00:12.00]Letra")
         if (cleaned.contains("||")) {
             val parts = cleaned.split("||", limit = 2)
-            if (parts.size == 2 && parts[0].length <= 6) {
+            if (parts.size == 2 && parts[0].length <= 8) {
                 cleaned = parts[1]
             }
         }
