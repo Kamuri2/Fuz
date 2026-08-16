@@ -213,14 +213,14 @@ fun PlayerScreen(
                         .fillMaxHeight()
                         .padding(end = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceEvenly
+                    verticalArrangement = Arrangement.Center
                 ) {
                     // Artwork Cover
                     Box(
                         modifier = Modifier
-                            .fillMaxHeight(0.68f)
+                            .fillMaxWidth(0.9f)
                             .aspectRatio(1f)
-                            .clip(RoundedCornerShape(24.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(Color(0x1AFFFFFF)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -250,7 +250,54 @@ fun PlayerScreen(
                                 )
                             }
                         }
+                        
+                        // Bottom Action Icons Row (Overlayed inside the cover)
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .background(androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
+                                ))
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = onFavoriteToggle, modifier = Modifier.testTag("player_favorite_btn")) {
+                                Icon(
+                                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = "Favorite",
+                                    tint = if (isFavorite) Color(0xFFFF5C00) else Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            IconButton(onClick = onDislikeToggle) {
+                                Icon(
+                                    imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
+                                    contentDescription = "Dislike",
+                                    tint = if (isDisliked) Color(0xFFEF4444) else Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            IconButton(onClick = { showAddToPlaylistModal = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add to playlist",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                            IconButton(onClick = onOpenQueue, modifier = Modifier.testTag("player_queue_btn")) {
+                                Icon(
+                                    imageVector = Icons.Default.QueueMusic,
+                                    contentDescription = "Queue",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
                     }
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Song Title & Artist - Album
                     Column(
@@ -278,59 +325,7 @@ fun PlayerScreen(
                         )
                     }
 
-                    // Bottom Action Icons Row (Like, Dislike, Add to playlist, Queue, Close/Back)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(0.85f),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = onFavoriteToggle, modifier = Modifier.testTag("player_favorite_btn")) {
-                            Icon(
-                                imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = "Favorite",
-                                tint = if (isFavorite) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
-                        IconButton(onClick = onDislikeToggle) {
-                            Icon(
-                                imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
-                                contentDescription = "Dislike",
-                                tint = if (isDisliked) Color(0xFFEF4444) else Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
-                        IconButton(onClick = { showAddToPlaylistModal = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add to playlist",
-                                tint = Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-
-                        IconButton(onClick = onOpenQueue, modifier = Modifier.testTag("player_queue_btn")) {
-                            Icon(
-                                imageVector = Icons.Default.QueueMusic,
-                                contentDescription = "Queue",
-                                tint = Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Back",
-                                tint = GlassTextMuted,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
                 }
-
                 // RIGHT SIDE: Playback Controls OR Lyrics Display
                 Box(
                     modifier = Modifier
@@ -345,7 +340,7 @@ fun PlayerScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(vertical = 8.dp),
-                            verticalArrangement = Arrangement.SpaceEvenly,
+                            verticalArrangement = Arrangement.Center,
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             // Main Playback Controls Row (Rewind 10s, Previous, Big Play/Pause, Next, Forward 10s)
@@ -362,6 +357,7 @@ fun PlayerScreen(
                                         modifier = Modifier.size(30.dp)
                                     )
                                 }
+                            Spacer(modifier = Modifier.height(24.dp))
                                 IconButton(onClick = { slideDirection = -1; onPrevious() }) {
                                     Icon(
                                         imageVector = Icons.Default.SkipPrevious,
@@ -435,22 +431,8 @@ fun PlayerScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
+                            Spacer(modifier = Modifier.height(24.dp))
 
-                            // Format Badge
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0x22FFFFFF))
-                                    .padding(horizontal = 14.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = formatTag,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    letterSpacing = 1.2.sp
-                                )
-                            }
 
                             // Secondary Control Icons (Mic/Lyrics, Repeat, Shuffle)
                             Row(
@@ -633,7 +615,7 @@ fun PlayerScreen(
                                     .padding(top = 20.dp)
                                     .fillMaxWidth(0.95f)
                                     .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(28.dp))
+                                    .clip(RoundedCornerShape(16.dp))
                                     .background(Color(0x1AFFFFFF)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -858,21 +840,6 @@ fun PlayerScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Audio Quality Pill Tag
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0x22FFFFFF))
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = formatTag,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.7f),
-                        letterSpacing = 1.2.sp
-                    )
-                }
 
                 Spacer(modifier = Modifier.height(12.dp))
             }
