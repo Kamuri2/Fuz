@@ -596,17 +596,6 @@ fun PlayerScreen(
                     }
                 }
 
-                // In the space above the lowered cover: Live Synchronized Lyrics that are playing right now!
-                LiveSyncedLyricSnippet(
-                    parsedLyrics = parsedLyrics,
-                    rawLyrics = currentTrack?.lyrics ?: "",
-                    currentPositionMs = currentPositionMs,
-                    onClick = { showLyricsMode = !showLyricsMode },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 40.dp, max = 54.dp)
-                )
-
                 AnimatedContent(
                     targetState = currentTrack,
                     transitionSpec = {
@@ -682,10 +671,24 @@ fun PlayerScreen(
                             }
                         }
 
+                        // Live Synchronized Lyrics that are playing right now!
+                        if (!showLyricsMode) {
+                            LiveSyncedLyricSnippet(
+                                parsedLyrics = parsedLyrics,
+                                rawLyrics = targetTrack?.lyrics ?: "",
+                                currentPositionMs = currentPositionMs,
+                                onClick = { showLyricsMode = !showLyricsMode },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 40.dp, max = 54.dp)
+                                    .padding(top = 4.dp, bottom = 4.dp)
+                            )
+                        }
+
                         // Title and Artist Centered
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(top = 6.dp)
+                            modifier = Modifier.padding(top = 4.dp)
                         ) {
                             Text(
                                 text = targetTrack?.title ?: "",
@@ -852,7 +855,7 @@ fun PlayerScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
 

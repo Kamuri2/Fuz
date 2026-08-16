@@ -203,14 +203,16 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
             permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true
         }
         if (isGranted) {
-            val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
-            if (deviceTracks.isNotEmpty()) {
-                loadedTracks = deviceTracks
-                coroutineScope.launch(Dispatchers.IO) {
+            coroutineScope.launch(Dispatchers.IO) {
+                val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
+                if (deviceTracks.isNotEmpty()) {
                     com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks)
-                }
-                if (playerManager.playlist.value.isEmpty()) {
-                    playerManager.setQueue(deviceTracks, 0, false)
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        loadedTracks = deviceTracks
+                        if (playerManager.playlist.value.isEmpty()) {
+                            playerManager.setQueue(deviceTracks, 0, false)
+                        }
+                    }
                 }
             }
         }
@@ -222,14 +224,18 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
             ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
         }
         if (hasPermission) {
-            val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
-            if (deviceTracks.isNotEmpty()) {
-                loadedTracks = deviceTracks
-                coroutineScope.launch(Dispatchers.IO) {
+            // Check if we already have cached tracks, if so, we can optionally scan in background and merge,
+            // but for now let's just do it in IO to prevent ANR.
+            kotlinx.coroutines.withContext(Dispatchers.IO) {
+                val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
+                if (deviceTracks.isNotEmpty()) {
                     com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks)
-                }
-                if (playerManager.playlist.value.isEmpty()) {
-                    playerManager.setQueue(deviceTracks, 0, false)
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        loadedTracks = deviceTracks
+                        if (playerManager.playlist.value.isEmpty()) {
+                            playerManager.setQueue(deviceTracks, 0, false)
+                        }
+                    }
                 }
             }
         } else {
@@ -400,23 +406,20 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
             }
         }
         } // End of Box wrapping Scaffold
-androidx.compose.animation.AnimatedVisibility(
-        visible = showQueueSheet,
-        enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
-        exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
-    ) {
-        QueueBottomSheet(
-            queue = playlist,
-            currentIndex = currentIndex,
-            onDismissRequest = { showQueueSheet = false },
-            onTrackSelect = { idx ->
-                playerManager.playTrackAtIndex(idx)
-                showQueueSheet = false
-            },
-            onRemoveFromQueue = { idx -> playerManager.removeFromQueue(idx) },
-            onSetPlayNext = { track -> playerManager.setPlayNext(track) }
-        )
-    }
+
+        if (showQueueSheet) {
+            QueueBottomSheet(
+                queue = playlist,
+                currentIndex = currentIndex,
+                onDismissRequest = { showQueueSheet = false },
+                onTrackSelect = { idx ->
+                    playerManager.playTrackAtIndex(idx)
+                    showQueueSheet = false
+                },
+                onRemoveFromQueue = { idx -> playerManager.removeFromQueue(idx) },
+                onSetPlayNext = { track -> playerManager.setPlayNext(track) }
+            )
+        }
     }
 }
 

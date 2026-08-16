@@ -68,37 +68,18 @@ fun QueueBottomSheet(
     onRemoveFromQueue: (Int) -> Unit,
     onSetPlayNext: (Track) -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.7f))
-            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
-                onDismissRequest()
-            },
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.85f)
-                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .background(Color(0xFF1A1A1A))
-                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
-                    // Prevent clicks from dismissing
-                }
-        ) {
-            // Header area that intercepts swipe down
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        containerColor = Color(0xFF1A1A1A),
+        scrimColor = Color.Black.copy(alpha = 0.5f),
+        dragHandle = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures { change, dragAmount ->
-                            if (dragAmount > 30f) {
-                                onDismissRequest()
-                            }
-                        }
-                    }
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(top = 16.dp, bottom = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
@@ -108,35 +89,41 @@ fun QueueBottomSheet(
                         .clip(RoundedCornerShape(2.dp))
                         .background(Color.White.copy(alpha = 0.4f))
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Start
-                ) {
-                    Column {
-                        Text(
-                            text = "Queue",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        val remainingCount = (queue.size - (currentIndex + 1)).coerceAtLeast(0)
-                        Text(
-                            text = "$remainingCount songs remaining",
-                            fontSize = 14.sp,
-                            color = GlassTextMuted
-                        )
-                    }
-                }
+            }
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+        ) {
+            // Header area
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = "Queue",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                val remainingCount = (queue.size - (currentIndex + 1)).coerceAtLeast(0)
+                Text(
+                    text = "$remainingCount songs remaining",
+                    fontSize = 14.sp,
+                    color = GlassTextMuted
+                )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             if (queue.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .height(300.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("No hay canciones en la cola", color = GlassTextMuted)
@@ -146,10 +133,10 @@ fun QueueBottomSheet(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
                         .padding(horizontal = 20.dp)
                 ) {
-                    val visibleQueue = queue.drop(currentIndex)
+                    // The user requested to show maximum 12 songs
+                    val visibleQueue = queue.drop(currentIndex).take(12)
                     itemsIndexed(
                         items = visibleQueue,
                         key = { index, track -> "${track.id}_${index + currentIndex}" }
