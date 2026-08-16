@@ -2,14 +2,12 @@ package com.example.data
 
 import android.content.Context
 import androidx.room.Dao
-import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
-import androidx.room.Room
-import androidx.room.RoomDatabase
+import com.example.data.local.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -32,33 +30,15 @@ interface ArtistDao {
     suspend fun insert(artist: ArtistEntity)
 }
 
-@Database(entities = [ArtistEntity::class], version = 1, exportSchema = false)
-abstract class AppDatabase : RoomDatabase() {
-    abstract fun artistDao(): ArtistDao
-
-    companion object {
-        @Volatile
-        private var INSTANCE: AppDatabase? = null
-
-        fun getDatabase(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "music_app_database"
-                ).build()
-                INSTANCE = instance
-                instance
-            }
-        }
-    }
-}
-
 object ArtistImageRepository {
     private var dao: ArtistDao? = null
 
     fun init(context: Context) {
-        dao = AppDatabase.getDatabase(context).artistDao()
+        try {
+            dao = AppDatabase.getDatabase(context).artistDao()
+        } catch (e: Exception) {
+            Log.e("ArtistImageRepository", "Error initializing ArtistImageRepository: ${e.message}")
+        }
     }
 
     suspend fun getArtistImageUrl(artistName: String): String? = withContext(Dispatchers.IO) {

@@ -45,6 +45,8 @@ class AudioPlayerManager private constructor(private val context: Context) {
         }
     }
 
+    private val prefs = context.getSharedPreferences("app_settings_prefs", android.content.Context.MODE_PRIVATE)
+
     private var mediaPlayer: MediaPlayer? = null
     private var fadingPlayer: MediaPlayer? = null
     private var activeSessionId = 0L
@@ -85,11 +87,19 @@ class AudioPlayerManager private constructor(private val context: Context) {
     val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
 
     private fun loadFavorites(): Set<Long> {
-        return prefs.getStringSet("favorite_ids", emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+        return try {
+            prefs.getStringSet("favorite_ids", emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
+        }
     }
 
     private fun saveFavorites(favs: Set<Long>) {
-        prefs.edit().putStringSet("favorite_ids", favs.map { it.toString() }.toSet()).apply()
+        try {
+            prefs.edit().putStringSet("favorite_ids", favs.map { it.toString() }.toSet()).apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving favorites: ${e.message}")
+        }
     }
 
     private val _volume = MutableStateFlow(1.0f)
@@ -102,35 +112,41 @@ class AudioPlayerManager private constructor(private val context: Context) {
     val sleepTimerMinutes: StateFlow<Int?> = _sleepTimerMinutes.asStateFlow()
 
     // App Settings State
-    private val prefs = context.getSharedPreferences("app_settings_prefs", android.content.Context.MODE_PRIVATE)
-
     private val _appSettings = MutableStateFlow(loadSettings())
     val appSettings: StateFlow<com.example.model.AppSettings> = _appSettings.asStateFlow()
 
     private fun loadSettings(): com.example.model.AppSettings {
-        return com.example.model.AppSettings(
-            isDarkMode = prefs.getBoolean("isDarkMode", true),
-            appLanguage = prefs.getString("appLanguage", "English") ?: "English",
-            selectedTheme = try { com.example.model.AppTheme.valueOf(prefs.getString("selectedTheme", "SUNSET") ?: "SUNSET") } catch(e: Exception) { com.example.model.AppTheme.SUNSET },
-            fontFamilyName = prefs.getString("fontFamilyName", "System Font (Default)") ?: "System Font (Default)",
-            lyricsFontSizePercent = prefs.getInt("lyricsFontSizePercent", 110),
-            isLyricsTranslationEnabled = prefs.getBoolean("isLyricsTranslationEnabled", false),
-            targetTranslationLanguage = prefs.getString("targetTranslationLanguage", "Spanish") ?: "Spanish",
-            crossfadeDuration = prefs.getFloat("crossfadeDuration", 0f)
-        )
+        return try {
+            com.example.model.AppSettings(
+                isDarkMode = prefs.getBoolean("isDarkMode", true),
+                appLanguage = prefs.getString("appLanguage", "English") ?: "English",
+                selectedTheme = try { com.example.model.AppTheme.valueOf(prefs.getString("selectedTheme", "SUNSET") ?: "SUNSET") } catch(e: Exception) { com.example.model.AppTheme.SUNSET },
+                fontFamilyName = prefs.getString("fontFamilyName", "System Font (Default)") ?: "System Font (Default)",
+                lyricsFontSizePercent = prefs.getInt("lyricsFontSizePercent", 110),
+                isLyricsTranslationEnabled = prefs.getBoolean("isLyricsTranslationEnabled", false),
+                targetTranslationLanguage = prefs.getString("targetTranslationLanguage", "Spanish") ?: "Spanish",
+                crossfadeDuration = prefs.getFloat("crossfadeDuration", 0f)
+            )
+        } catch (e: Exception) {
+            com.example.model.AppSettings()
+        }
     }
 
     private fun saveSettings(settings: com.example.model.AppSettings) {
-        prefs.edit().apply {
-            putBoolean("isDarkMode", settings.isDarkMode)
-            putString("appLanguage", settings.appLanguage)
-            putString("selectedTheme", settings.selectedTheme.name)
-            putString("fontFamilyName", settings.fontFamilyName)
-            putInt("lyricsFontSizePercent", settings.lyricsFontSizePercent)
-            putBoolean("isLyricsTranslationEnabled", settings.isLyricsTranslationEnabled)
-            putString("targetTranslationLanguage", settings.targetTranslationLanguage)
-            putFloat("crossfadeDuration", settings.crossfadeDuration)
-            apply()
+        try {
+            prefs.edit().apply {
+                putBoolean("isDarkMode", settings.isDarkMode)
+                putString("appLanguage", settings.appLanguage)
+                putString("selectedTheme", settings.selectedTheme.name)
+                putString("fontFamilyName", settings.fontFamilyName)
+                putInt("lyricsFontSizePercent", settings.lyricsFontSizePercent)
+                putBoolean("isLyricsTranslationEnabled", settings.isLyricsTranslationEnabled)
+                putString("targetTranslationLanguage", settings.targetTranslationLanguage)
+                putFloat("crossfadeDuration", settings.crossfadeDuration)
+                apply()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving settings: ${e.message}")
         }
     }
 
@@ -139,11 +155,19 @@ class AudioPlayerManager private constructor(private val context: Context) {
     val dislikedTracks: StateFlow<Set<Long>> = _dislikedTracks.asStateFlow()
 
     private fun loadDislikes(): Set<Long> {
-        return prefs.getStringSet("disliked_ids", emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+        return try {
+            prefs.getStringSet("disliked_ids", emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
+        }
     }
 
     private fun saveDislikes(dislikes: Set<Long>) {
-        prefs.edit().putStringSet("disliked_ids", dislikes.map { it.toString() }.toSet()).apply()
+        try {
+            prefs.edit().putStringSet("disliked_ids", dislikes.map { it.toString() }.toSet()).apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving dislikes: ${e.message}")
+        }
     }
 
     // Playlists State
