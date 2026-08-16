@@ -81,8 +81,16 @@ class AudioPlayerManager private constructor(private val context: Context) {
     private val _eqPreset = MutableStateFlow(EqPreset.FLAT)
     val eqPreset: StateFlow<EqPreset> = _eqPreset.asStateFlow()
 
-    private val _favorites = MutableStateFlow<Set<Long>>(emptySet())
+    private val _favorites = MutableStateFlow<Set<Long>>(loadFavorites())
     val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
+
+    private fun loadFavorites(): Set<Long> {
+        return prefs.getStringSet("favorite_ids", emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+    }
+
+    private fun saveFavorites(favs: Set<Long>) {
+        prefs.edit().putStringSet("favorite_ids", favs.map { it.toString() }.toSet()).apply()
+    }
 
     private val _volume = MutableStateFlow(1.0f)
     val volume: StateFlow<Float> = _volume.asStateFlow()
@@ -94,7 +102,7 @@ class AudioPlayerManager private constructor(private val context: Context) {
     val sleepTimerMinutes: StateFlow<Int?> = _sleepTimerMinutes.asStateFlow()
 
     // App Settings State
-private val prefs = context.getSharedPreferences("app_settings_prefs", android.content.Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("app_settings_prefs", android.content.Context.MODE_PRIVATE)
 
     private val _appSettings = MutableStateFlow(loadSettings())
     val appSettings: StateFlow<com.example.model.AppSettings> = _appSettings.asStateFlow()
@@ -126,10 +134,17 @@ private val prefs = context.getSharedPreferences("app_settings_prefs", android.c
         }
     }
 
-
     // Disliked Tracks State
-    private val _dislikedTracks = kotlinx.coroutines.flow.MutableStateFlow<Set<Long>>(emptySet())
-    val dislikedTracks: kotlinx.coroutines.flow.StateFlow<Set<Long>> = _dislikedTracks.asStateFlow()
+    private val _dislikedTracks = MutableStateFlow<Set<Long>>(loadDislikes())
+    val dislikedTracks: StateFlow<Set<Long>> = _dislikedTracks.asStateFlow()
+
+    private fun loadDislikes(): Set<Long> {
+        return prefs.getStringSet("disliked_ids", emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+    }
+
+    private fun saveDislikes(dislikes: Set<Long>) {
+        prefs.edit().putStringSet("disliked_ids", dislikes.map { it.toString() }.toSet()).apply()
+    }
 
     // Playlists State
     private val _playlistsMap = kotlinx.coroutines.flow.MutableStateFlow<Map<String, List<com.example.model.Track>>>(
@@ -170,6 +185,7 @@ private val prefs = context.getSharedPreferences("app_settings_prefs", android.c
             set.add(trackId)
         }
         _dislikedTracks.value = set
+        saveDislikes(set)
     }
 
     fun removeFromQueue(index: Int) {
@@ -321,6 +337,9 @@ private val prefs = context.getSharedPreferences("app_settings_prefs", android.c
                 val enriched = com.example.data.MetadataReader.extractFullMetadata(context, track)
                 if (_currentIndex.value == index) {
                     _currentTrack.value = enriched
+                }
+                if (enriched.lyrics.isNotBlank()) {
+                    com.example.data.TrackRepository.updateTrackLyrics(context, track.id, enriched.lyrics)
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "Metadata extraction skipped: ${e.message}")
@@ -562,6 +581,7 @@ private val prefs = context.getSharedPreferences("app_settings_prefs", android.c
             set.add(trackId)
         }
         _favorites.value = set
+        saveFavorites(set)
     }
 
     fun setEqPreset(preset: EqPreset) {

@@ -200,14 +200,56 @@ object MetadataReader {
     }
 
     private fun findLyricsInTag(tag: Tag): String {
-        // Lista exhaustiva de claves comunes en MP3 (ID3), FLAC (Vorbis), M4A (MP4), OGG, OPUS, WAV
-        val candidateKeys = listOf(
+        // 1. First priority: Look for synchronized lyrics fields specifically
+        val syncedCandidateKeys = listOf(
             "SYNCEDLYRICS",
             "SYNCED LYRICS",
             "TXXX:SYNCEDLYRICS",
             "TXXX:SYNCED LYRICS",
             "TXXX:LRC",
             "SYLT",
+            "LYRICS_SYNCED",
+            "----:com.apple.iTunes:SYNCEDLYRICS"
+        )
+
+        for (key in syncedCandidateKeys) {
+            try {
+                val value = tag.getFirst(key)
+                if (!value.isNullOrBlank()) {
+                    val cleaned = cleanExtractedLyrics(value)
+                    if (cleaned.isNotBlank()) return cleaned
+                }
+            } catch (e: Exception) {}
+        }
+
+        // 2. Iterate ALL fields in the tag to find any lyrics (including custom and Vorbis/ID3/MP4 tags)
+        try {
+            val iterator = tag.fields
+            var fallbackUnsynced = ""
+            while (iterator.hasNext()) {
+                val field = iterator.next()
+                val id = (field.id ?: "").uppercase()
+                val strVal = field.toString()
+                if (id.contains("LYRIC") || id.contains("LRC") || id.contains("SYLT") || id.contains("USLT") || id.contains("TEXT") || id.contains("©LYR")) {
+                    val cleaned = cleanExtractedLyrics(strVal)
+                    if (cleaned.isNotBlank()) {
+                        // If it contains timestamp pattern [00:00], it is synced! Return immediately
+                        if (cleaned.contains(Regex("\\[\\d{1,2}:\\d{2}"))) {
+                            return cleaned
+                        }
+                        if (fallbackUnsynced.isBlank()) {
+                            fallbackUnsynced = cleaned
+                        }
+                    }
+                }
+            }
+            if (fallbackUnsynced.isNotBlank()) {
+                return fallbackUnsynced
+            }
+        } catch (e: Exception) {}
+
+        // 3. Fallback candidates for unsynchronized lyrics
+        val unsyncedCandidateKeys = listOf(
             "UNSYNCEDLYRICS",
             "UNSYNCED LYRICS",
             "TXXX:UNSYNCEDLYRICS",
@@ -219,10 +261,11 @@ object MetadataReader {
             "©lyr",
             "TEXT",
             "COMM:Lyrics",
-            "ULTRASTAR"
+            "ULTRASTAR",
+            "----:com.apple.iTunes:LYRICS"
         )
 
-        for (key in candidateKeys) {
+        for (key in unsyncedCandidateKeys) {
             try {
                 val value = tag.getFirst(key)
                 if (!value.isNullOrBlank()) {
@@ -232,7 +275,7 @@ object MetadataReader {
             } catch (e: Exception) {}
         }
 
-        // Intento con FieldKey estándar
+        // 4. Intento con FieldKey estándar
         try {
             val stdLyrics = tag.getFirst(FieldKey.LYRICS)
             if (!stdLyrics.isNullOrBlank()) {

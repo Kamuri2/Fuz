@@ -7,7 +7,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -557,7 +560,7 @@ fun PlayerScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp)
+                        .padding(top = 4.dp)
                         .clickable { onBack() }
                 ) {
                     Box(
@@ -567,11 +570,11 @@ fun PlayerScreen(
                             .clip(CircleShape)
                             .background(Color.White.copy(alpha = 0.5f))
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp)
+                            .padding(vertical = 2.dp)
                             .clickable { onBack() },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
@@ -593,7 +596,16 @@ fun PlayerScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                // In the space above the lowered cover: Live Synchronized Lyrics that are playing right now!
+                LiveSyncedLyricSnippet(
+                    parsedLyrics = parsedLyrics,
+                    rawLyrics = currentTrack?.lyrics ?: "",
+                    currentPositionMs = currentPositionMs,
+                    onClick = { showLyricsMode = !showLyricsMode },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 40.dp, max = 54.dp)
+                )
 
                 AnimatedContent(
                     targetState = currentTrack,
@@ -607,13 +619,17 @@ fun PlayerScreen(
                     label = "Track Transition",
                     modifier = Modifier.weight(1f)
                 ) { targetTrack ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceEvenly
+                    ) {
                         if (!showLyricsMode) {
-                            // Enlarged Square Album Art
+                            // Enlarged and lowered Square Album Art
                             Box(
                                 modifier = Modifier
-                                    .padding(top = 20.dp)
-                                    .fillMaxWidth(0.95f)
+                                    .padding(top = 8.dp)
+                                    .fillMaxWidth(0.96f)
                                     .aspectRatio(1f)
                                     .clip(RoundedCornerShape(16.dp))
                                     .background(Color(0x1AFFFFFF)),
@@ -647,10 +663,11 @@ fun PlayerScreen(
                                 }
                             }
                         } else {
-                            // Synced Lyrics Display in Portrait
+                            // Full Synced Lyrics Display in Portrait
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(0.95f)
+                                    .padding(top = 8.dp)
+                                    .fillMaxWidth(0.96f)
                                     .aspectRatio(1f),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -665,23 +682,24 @@ fun PlayerScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.weight(1f))
-
                         // Title and Artist Centered
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(top = 6.dp)
+                        ) {
                             Text(
-                                text = targetTrack?.title ?: "Trapped",
-                                fontSize = 26.sp,
+                                text = targetTrack?.title ?: "",
+                                fontSize = 24.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = targetTrack?.artist ?: "2Pac",
-                                fontSize = 16.sp,
+                                text = targetTrack?.artist ?: "",
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = GlassTextSecondary,
                                 textAlign = TextAlign.Center,
@@ -689,8 +707,6 @@ fun PlayerScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(14.dp))
 
                         // Action Icons Row
                         Row(
@@ -751,19 +767,17 @@ fun PlayerScreen(
                                 )
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(10.dp))
                     }
                 }
 
                 // Progress Bar & Duration Labels
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(text = formatDuration(currentPositionMs), fontSize = 11.sp, color = GlassTextMuted)
-                        Text(text = formatDuration(durationMs), fontSize = 11.sp, color = GlassTextMuted)
+                        Text(text = formatDuration(currentPositionMs), fontSize = 12.sp, color = GlassTextMuted)
+                        Text(text = formatDuration(durationMs), fontSize = 12.sp, color = GlassTextMuted)
                     }
 
                     Slider(
@@ -778,7 +792,7 @@ fun PlayerScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 // Main Playback Controls
                 Row(
@@ -838,10 +852,7 @@ fun PlayerScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
 
@@ -883,6 +894,103 @@ fun PlayerScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun LiveSyncedLyricSnippet(
+    parsedLyrics: List<LrcLine>,
+    rawLyrics: String,
+    currentPositionMs: Long,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val activeIndex = remember(currentPositionMs, parsedLyrics) {
+        LrcParser.getCurrentLineIndex(parsedLyrics, currentPositionMs)
+    }
+
+    val currentLineText = remember(activeIndex, parsedLyrics, rawLyrics) {
+        when {
+            parsedLyrics.isNotEmpty() && activeIndex in parsedLyrics.indices -> parsedLyrics[activeIndex].text
+            parsedLyrics.isNotEmpty() && activeIndex < 0 -> parsedLyrics.firstOrNull()?.text ?: ""
+            rawLyrics.isNotBlank() -> rawLyrics.lines().firstOrNull { it.isNotBlank() } ?: ""
+            else -> ""
+        }
+    }
+
+    val nextLineText = remember(activeIndex, parsedLyrics) {
+        if (parsedLyrics.isNotEmpty() && activeIndex + 1 in parsedLyrics.indices) {
+            parsedLyrics[activeIndex + 1].text
+        } else null
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (currentLineText.isNotBlank()) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                AnimatedContent(
+                    targetState = currentLineText,
+                    transitionSpec = {
+                        (slideInVertically { height -> height / 2 } + fadeIn()).togetherWith(
+                            slideOutVertically { height -> -height / 2 } + fadeOut()
+                        )
+                    },
+                    label = "LiveLyricLine"
+                ) { targetLine ->
+                    Text(
+                        text = targetLine,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                if (nextLineText != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = nextLineText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.45f),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.35f),
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "♪ • ♪ • ♪",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.35f),
+                    letterSpacing = 2.sp
+                )
             }
         }
     }

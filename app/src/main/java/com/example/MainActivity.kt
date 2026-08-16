@@ -56,6 +56,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +72,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.example.data.AudioScanner
 import com.example.model.Track
@@ -102,6 +105,7 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         com.example.data.ArtistImageRepository.init(this)
+        com.example.data.TrackRepository.init(this)
         enableEdgeToEdge()
 
         playerManager = AudioPlayerManager.getInstance(applicationContext)
@@ -125,10 +129,22 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
     val appSettings by playerManager.appSettings.collectAsState()
 
     LiquidMusicTheme(appSettings = appSettings) {
+        val coroutineScope = rememberCoroutineScope()
         var currentScreen by remember { mutableStateOf(NavigationScreen.HOME) }
         var isPlayerExpanded by remember { mutableStateOf(false) }
+        val cachedTracks by com.example.data.TrackRepository.tracks.collectAsState()
         var loadedTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
         var showQueueSheet by remember { mutableStateOf(false) }
+
+        // Sync with cached tracks immediately on start
+        LaunchedEffect(cachedTracks) {
+            if (cachedTracks.isNotEmpty() && loadedTracks.isEmpty()) {
+                loadedTracks = cachedTracks
+                if (playerManager.playlist.value.isEmpty()) {
+                    playerManager.setQueue(cachedTracks, 0, false)
+                }
+            }
+        }
 
     // Player State Collection
     val playlist by playerManager.playlist.collectAsState()
@@ -161,6 +177,9 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
             if (folderTracks.isNotEmpty()) {
                 loadedTracks = folderTracks
                 playerManager.setQueue(folderTracks, 0, false)
+                coroutineScope.launch(Dispatchers.IO) {
+                    com.example.data.TrackRepository.saveScannedTracks(context, folderTracks)
+                }
                 Toast.makeText(context, "Se cargaron ${folderTracks.size} canciones", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(context, "No se encontraron archivos de audio en la carpeta", Toast.LENGTH_LONG).show()
@@ -185,9 +204,14 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         }
         if (isGranted) {
             val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
-            loadedTracks = deviceTracks
             if (deviceTracks.isNotEmpty()) {
-                playerManager.setQueue(deviceTracks, 0, false)
+                loadedTracks = deviceTracks
+                coroutineScope.launch(Dispatchers.IO) {
+                    com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks)
+                }
+                if (playerManager.playlist.value.isEmpty()) {
+                    playerManager.setQueue(deviceTracks, 0, false)
+                }
             }
         }
     }
@@ -199,9 +223,14 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         }
         if (hasPermission) {
             val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
-            loadedTracks = deviceTracks
             if (deviceTracks.isNotEmpty()) {
-                playerManager.setQueue(deviceTracks, 0, false)
+                loadedTracks = deviceTracks
+                coroutineScope.launch(Dispatchers.IO) {
+                    com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks)
+                }
+                if (playerManager.playlist.value.isEmpty()) {
+                    playerManager.setQueue(deviceTracks, 0, false)
+                }
             }
         } else {
             permissionLauncher.launch(requiredPermissions)
