@@ -28,6 +28,8 @@ object TrackRepository {
         scope.launch {
             try {
                 val db = AppDatabase.getDatabase(context)
+                // Forcing a DB clear to remove any corrupted lyrics cache from previous builds
+                db.trackDao().clear()
                 val cached = db.trackDao().getAllTracks().map { it.toTrack() }
                 if (cached.isNotEmpty()) {
                     _tracks.value = cached

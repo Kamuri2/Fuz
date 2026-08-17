@@ -304,8 +304,7 @@ object MetadataReader {
                 if (content.isNotBlank()) {
                     // Check if field is lyrics-related or contains timestamp lyrics
                     val isLyricField = id.contains("LYRIC") || id.contains("LRC") || id.contains("SYLT") || 
-                                       id.contains("USLT") || id.contains("TEXT") || id.contains("LYR") ||
-                                       id.contains("TXXX") || id.contains("COMM")
+                                       id.contains("USLT") || id.contains("©LYR") || id.contains("UNSYNCED")
 
                     val hasSyncedTimestamps = content.contains(Regex("(\\[|<)\\d{1,3}:\\d{1,2}"))
 
@@ -331,10 +330,8 @@ object MetadataReader {
         val candidateKeys = listOf(
             "SYLT", "SYNCEDLYRICS", "SYNCED LYRICS", "TXXX:SYNCEDLYRICS", "TXXX:SYNCED LYRICS",
             "TXXX:LRC", "LYRICS_SYNCED", "USLT", "UNSYNCEDLYRICS", "UNSYNCED LYRICS",
-            "TXXX:UNSYNCEDLYRICS", "TXXX:LYRICS", "LYRICS", "Lyrics", "©lyr", "TEXT",
-            "----:com.apple.iTunes:SYNCEDLYRICS", "----:com.apple.iTunes:LYRICS",
-            "lyrics", "unsynced lyrics", "synced lyrics", "SYLT:Lyrics", "USLT:Lyrics",
-            "COMM", "TXXX"
+            "TXXX:UNSYNCEDLYRICS", "TXXX:LYRICS", "LYRICS", "Lyrics", "©lyr",
+            "----:com.apple.iTunes:SYNCEDLYRICS", "----:com.apple.iTunes:LYRICS"
         )
 
         for (key in candidateKeys) {

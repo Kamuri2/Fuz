@@ -404,8 +404,24 @@ class AudioPlayerManager private constructor(private val context: Context) {
                     currentPlaylist[index] = enriched
                     _playlist.value = currentPlaylist
                 }
-                if (enriched.lyrics.isNotBlank()) {
-                    com.example.data.TrackRepository.updateTrackLyrics(context, track.id, enriched.lyrics)
+                var finalEnriched = enriched
+                if (finalEnriched.lyrics.isBlank()) {
+                    // Fallback to internet if local extraction yielded nothing
+                    val onlineLyrics = com.example.data.LrcLibHelper.fetchLyrics(track.title, track.artist, track.album, (track.durationMs / 1000).toInt())
+                    if (onlineLyrics != null && onlineLyrics.isNotBlank()) {
+                        finalEnriched = finalEnriched.copy(lyrics = onlineLyrics)
+                        if (_currentIndex.value == index) {
+                            _currentTrack.value = finalEnriched
+                        }
+                        if (index in currentPlaylist.indices && currentPlaylist[index].id == track.id) {
+                            currentPlaylist[index] = finalEnriched
+                            _playlist.value = currentPlaylist
+                        }
+                    }
+                }
+                
+                if (finalEnriched.lyrics.isNotBlank()) {
+                    com.example.data.TrackRepository.updateTrackLyrics(context, track.id, finalEnriched.lyrics)
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "Metadata extraction skipped: ${e.message}")
