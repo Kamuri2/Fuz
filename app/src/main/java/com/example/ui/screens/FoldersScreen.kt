@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -129,7 +130,7 @@ fun FoldersScreen(
                                     Icon(
                                         imageVector = Icons.Default.Folder,
                                         contentDescription = null,
-                                        tint = Color(0xFFFF5C00),
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(28.dp)
                                     )
                                 }
@@ -171,7 +172,7 @@ fun FoldersScreen(
                             .fillMaxWidth()
                             .clickable { onPlayFolder(activeTracks, activeTracks.indexOf(track)) },
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = if (isCurrent) Color(0x33FF5C00) else Color(0x1AFFFFFF))
+                        colors = CardDefaults.cardColors(containerColor = if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color(0x1AFFFFFF))
                     ) {
                         Row(
                             modifier = Modifier
@@ -184,7 +185,7 @@ fun FoldersScreen(
                                     text = track.title,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isCurrent) Color(0xFFFF5C00) else Color.White
+                                    color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.White
                                 )
                                 Text(
                                     text = track.artist,

@@ -1,0 +1,1 @@
+sed -i 's/when {/if (currentTrack != null) { com.example.ui.components.TrackImage(track = currentTrack, modifier = Modifier.fillMaxSize()) } else { Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(96.dp)) } \/\//g' app/src/main/java/com/example/ui/screens/PlayerScreen.kt

@@ -74,15 +74,95 @@ class PlaybackService : Service() {
             .putLong(MediaMetadata.METADATA_KEY_DURATION, track.durationMs)
 
         var albumArtBitmap: android.graphics.Bitmap? = null
-        if (track.albumArtBytes != null) {
-            albumArtBitmap = BitmapFactory.decodeByteArray(track.albumArtBytes, 0, track.albumArtBytes.size)
-        } else if (track.albumArtUri != null) {
+        try {
+            if (track.path.isNotBlank() && !track.path.startsWith("content://")) {
+                val file = java.io.File(track.path)
+                if (file.exists()) {
+                    val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+                    val rawBytes = audioFile.tag?.firstArtwork?.binaryData
+                    if (rawBytes != null) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            val source = android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(rawBytes))
+                            albumArtBitmap = android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                                var sampleSize = 1
+                                if (info.size.height > 300 || info.size.width > 300) {
+                                    var halfHeight = info.size.height / 2
+                                    var halfWidth = info.size.width / 2
+                                    while (halfHeight / sampleSize >= 300 && halfWidth / sampleSize >= 300) {
+                                        sampleSize *= 2
+                                    }
+                                }
+                                decoder.setTargetSampleSize(sampleSize)
+                                // decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+                            }
+                        } else {
+                            val options = android.graphics.BitmapFactory.Options().apply {
+                                inJustDecodeBounds = true
+                            }
+                            android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
+                            
+                            var inSampleSize = 1
+                            if (options.outHeight > 300 || options.outWidth > 300) {
+                                val halfHeight = options.outHeight / 2
+                                val halfWidth = options.outWidth / 2
+                                while (halfHeight / inSampleSize >= 300 && halfWidth / inSampleSize >= 300) {
+                                    inSampleSize *= 2
+                                }
+                            }
+                            val finalOptions = android.graphics.BitmapFactory.Options().apply {
+                                this.inSampleSize = inSampleSize
+                                inPreferredConfig = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                    android.graphics.Bitmap.Config.HARDWARE
+                                } else {
+                                    android.graphics.Bitmap.Config.ARGB_8888
+                                }
+                            }
+                            albumArtBitmap = android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, finalOptions)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {}
+        
+        if (albumArtBitmap == null && track.albumArtUri != null) {
             try {
-                albumArtBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(contentResolver, track.albumArtUri))
+                // For MediaStore URIs, we should also try to limit size if possible, but keeping it simple for now
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val source = android.graphics.ImageDecoder.createSource(contentResolver, track.albumArtUri)
+                    albumArtBitmap = android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                        var sampleSize = 1
+                        if (info.size.height > 300 || info.size.width > 300) {
+                            var halfHeight = info.size.height / 2
+                            var halfWidth = info.size.width / 2
+                            while (halfHeight / sampleSize >= 300 && halfWidth / sampleSize >= 300) {
+                                sampleSize *= 2
+                            }
+                        }
+                        decoder.setTargetSampleSize(sampleSize)
+                        // decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+                    }
                 } else {
-                    @Suppress("DEPRECATION")
-                    android.provider.MediaStore.Images.Media.getBitmap(contentResolver, track.albumArtUri)
+                    val pfd = contentResolver.openFileDescriptor(track.albumArtUri, "r")
+                    if (pfd != null) {
+                        val fd = pfd.fileDescriptor
+                        val options = android.graphics.BitmapFactory.Options().apply {
+                            inJustDecodeBounds = true
+                        }
+                        android.graphics.BitmapFactory.decodeFileDescriptor(fd, null, options)
+                        var inSampleSize = 1
+                        if (options.outHeight > 300 || options.outWidth > 300) {
+                            val halfHeight = options.outHeight / 2
+                            val halfWidth = options.outWidth / 2
+                            while (halfHeight / inSampleSize >= 300 && halfWidth / inSampleSize >= 300) {
+                                inSampleSize *= 2
+                            }
+                        }
+                        val finalOptions = android.graphics.BitmapFactory.Options().apply {
+                            this.inSampleSize = inSampleSize
+                        }
+                        albumArtBitmap = android.graphics.BitmapFactory.decodeFileDescriptor(fd, null, finalOptions)
+                        pfd.close()
+                    }
                 }
             } catch (e: Exception) {}
         }
@@ -134,7 +214,17 @@ class PlaybackService : Service() {
             builder.setLargeIcon(albumArtBitmap)
         }
 
-        startForeground(1, builder.build())
+        if (isPlaying) {
+            startForeground(1, builder.build())
+        } else {
+            val notification = builder.build()
+            startForeground(1, notification)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_DETACH)
+            } else {
+                stopForeground(false)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

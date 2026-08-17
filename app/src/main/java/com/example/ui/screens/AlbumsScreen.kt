@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 
+import androidx.compose.material3.MaterialTheme
 import android.graphics.BitmapFactory
 
 import androidx.compose.foundation.Image
@@ -144,12 +145,7 @@ fun AlbumsScreen(
                         val albumTracks = albumGroups[albumName] ?: emptyList()
                         val firstTrack = albumTracks.firstOrNull()
 
-                        val artworkBitmap = remember(firstTrack?.albumArtBytes) {
-                            firstTrack?.albumArtBytes?.let { bytes ->
-                                try { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() } catch (e: Exception) { null }
-                            }
-                        }
-
+                        val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -169,7 +165,7 @@ fun AlbumsScreen(
                                     when {
                                         artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                                         firstTrack?.albumArtUri != null -> AsyncImage(model = firstTrack.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                        else -> Icon(imageVector = Icons.Default.Album, contentDescription = null, tint = Color(0xFFFF5C00), modifier = Modifier.size(48.dp))
+                                        else -> Icon(imageVector = Icons.Default.Album, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
                                     }
                                 }
 
@@ -198,7 +194,7 @@ fun AlbumsScreen(
                             .padding(end = 40.dp)
                             .size(60.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFFF5C00)),
+                            .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(text = currentDragLetter!!, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
@@ -256,11 +252,7 @@ fun AlbumDetailScreen(
     onShuffleAll: () -> Unit
 ) {
     val firstTrack = tracks.firstOrNull()
-    val artworkBitmap = remember(firstTrack?.albumArtBytes) {
-        firstTrack?.albumArtBytes?.let { bytes ->
-            try { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() } catch (e: Exception) { null }
-        }
-    }
+    val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
     
     val sortedTracks = tracks
 

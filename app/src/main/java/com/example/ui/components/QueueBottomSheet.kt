@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.material3.MaterialTheme
 import android.graphics.BitmapFactory
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Image
@@ -50,7 +51,7 @@ import coil.compose.AsyncImage
 import com.example.model.Track
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextSecondary
-import com.example.ui.theme.OrangeAccent
+
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -218,21 +219,13 @@ private fun QueueTrackRowItem(
     isCurrent: Boolean,
     onClick: () -> Unit
 ) {
-    val artworkBitmap = remember(track.albumArtBytes) {
-        track.albumArtBytes?.let { bytes ->
-            try {
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
+    val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(if (isCurrent) Color(0x28FF5C00) else Color(0x1AFFFFFF))
+            .background(if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else Color(0x1AFFFFFF))
             .clickable { onClick() }
             .padding(vertical = 10.dp, horizontal = 12.dp)
     ) {
@@ -258,7 +251,7 @@ private fun QueueTrackRowItem(
                 when {
                     artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     track.albumArtUri != null -> AsyncImage(model = track.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    else -> Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(20.dp))
+                    else -> Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 }
             }
             
@@ -268,7 +261,7 @@ private fun QueueTrackRowItem(
                     text = track.title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isCurrent) OrangeAccent else Color.White,
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

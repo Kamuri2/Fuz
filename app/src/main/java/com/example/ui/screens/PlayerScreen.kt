@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.material3.MaterialTheme
 import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedContent
@@ -11,6 +12,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -79,6 +81,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -96,6 +99,7 @@ import com.example.data.LrcParser
 import com.example.model.Track
 import com.example.player.LoopMode
 import com.example.ui.components.LiquidGlassBackground
+import com.example.ui.components.ArtistInfoTab
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextSecondary
 import kotlinx.coroutines.Dispatchers
@@ -143,32 +147,20 @@ fun PlayerScreen(
     }
 
     var showAddToPlaylistModal by remember { mutableStateOf(false) }
+    
+    var artistInfo by remember { mutableStateOf<com.example.data.ArtistInfo?>(null) }
+    LaunchedEffect(currentTrack?.artist) {
+        artistInfo = null
+        currentTrack?.artist?.let { artistName ->
+            artistInfo = com.example.data.ArtistInfoFetcher.fetchArtistInfo(artistName)
+        }
+    }
 
     val parsedLyrics = remember(currentTrack?.lyrics) {
         LrcParser.parse(currentTrack?.lyrics ?: "")
     }
 
-    var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-
-    LaunchedEffect(currentTrack?.id, currentTrack?.albumArtBytes) {
-        if (currentTrack?.albumArtBytes != null) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val bytes = currentTrack.albumArtBytes
-                    val options = BitmapFactory.Options().apply {
-                        inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
-                        inDither = false
-                    }
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-                    artworkBitmap = bitmap?.asImageBitmap()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        } else {
-            artworkBitmap = null
-        }
-    }
+    // artworkBitmap removed in favor of TrackImage
 
     val formatTag = remember(currentTrack) {
         if (currentTrack == null) "FLAC  988 KBPS  44.1 KHZ"
@@ -182,12 +174,14 @@ fun PlayerScreen(
                 currentTrack.path.endsWith(".ogg", true) -> "OGG"
                 else -> "FLAC"
             }
-            "$extension  ${currentTrack.bitrate.uppercase()}  ${currentTrack.sampleRate.uppercase()}"
+            // Use fallback strings if bitrate/samplerate properties don't exist
+            "$extension  |  ${currentTrack.fileSizeFormatted}  |  44.1 KHZ"
         }
     }
 
     LiquidGlassBackground(isPlaying = isPlaying, currentTrack = currentTrack, modifier = modifier) {
-        if (isLandscape) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (isLandscape) {
             // ==================== LANDSCAPE MODE ====================
             Box(modifier = Modifier.fillMaxSize()) {
                 IconButton(
@@ -225,77 +219,10 @@ fun PlayerScreen(
                             .background(Color(0x1AFFFFFF)),
                         contentAlignment = Alignment.Center
                     ) {
-                        when {
-                            artworkBitmap != null -> {
-                                Image(
-                                    bitmap = artworkBitmap!!,
-                                    contentDescription = currentTrack?.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                            currentTrack?.albumArtUri != null -> {
-                                AsyncImage(
-                                    model = currentTrack.albumArtUri,
-                                    contentDescription = currentTrack.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                            else -> {
-                                Icon(
-                                    imageVector = Icons.Default.MusicNote,
-                                    contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(72.dp)
-                                )
-                            }
-                        }
-                        
-                        // Bottom Action Icons Row (Overlayed inside the cover)
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .background(androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
-                                ))
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = onFavoriteToggle, modifier = Modifier.testTag("player_favorite_btn")) {
-                                Icon(
-                                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                    contentDescription = "Favorite",
-                                    tint = if (isFavorite) Color(0xFFFF5C00) else Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            IconButton(onClick = onDislikeToggle) {
-                                Icon(
-                                    imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
-                                    contentDescription = "Dislike",
-                                    tint = if (isDisliked) Color(0xFFEF4444) else Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            IconButton(onClick = { showAddToPlaylistModal = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Add to playlist",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(26.dp)
-                                )
-                            }
-                            IconButton(onClick = onOpenQueue, modifier = Modifier.testTag("player_queue_btn")) {
-                                Icon(
-                                    imageVector = Icons.Default.QueueMusic,
-                                    contentDescription = "Queue",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
+                        if (currentTrack != null) {
+                            com.example.ui.components.TrackImage(track = currentTrack, modifier = Modifier.fillMaxSize())
+                        } else {
+                            Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(96.dp))
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -445,7 +372,7 @@ fun PlayerScreen(
                                     Icon(
                                         imageVector = Icons.Default.Shuffle,
                                         contentDescription = "Shuffle",
-                                        tint = if (isShuffle) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.6f),
+                                        tint = if (isShuffle) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.6f),
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -462,7 +389,7 @@ fun PlayerScreen(
                                     Icon(
                                         imageVector = Icons.Default.Mic,
                                         contentDescription = "Lyrics",
-                                        tint = if (showLyricsMode) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.8f),
+                                        tint = if (showLyricsMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.8f),
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -471,7 +398,7 @@ fun PlayerScreen(
                                     Icon(
                                         imageVector = if (loopMode == LoopMode.REPEAT_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
                                         contentDescription = "Repeat",
-                                        tint = if (loopMode != LoopMode.OFF) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.6f),
+                                        tint = if (loopMode != LoopMode.OFF) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.6f),
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -496,7 +423,7 @@ fun PlayerScreen(
                                     Icon(
                                         imageVector = Icons.Default.Mic,
                                         contentDescription = null,
-                                        tint = Color(0xFFFF5C00),
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -549,7 +476,7 @@ fun PlayerScreen(
                             }
                         }
                     }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(top = 8.dp, bottom = 54.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
@@ -558,15 +485,15 @@ fun PlayerScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 4.dp)
+                        .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 0.dp)
                         .clickable { onBack() }
                 ) {
                     Box(
                         modifier = Modifier
-                            .width(48.dp)
-                            .height(5.dp)
+                            .width(44.dp)
+                            .height(4.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.5f))
+                            .background(Color.White.copy(alpha = 0.45f))
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
@@ -581,7 +508,7 @@ fun PlayerScreen(
                             imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = "Deslizar para cerrar",
                             tint = GlassTextMuted,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
@@ -593,6 +520,9 @@ fun PlayerScreen(
                         )
                     }
                 }
+
+                // Breathing space
+                Spacer(modifier = Modifier.height(2.dp))
 
                 AnimatedContent(
                     targetState = currentTrack,
@@ -606,140 +536,120 @@ fun PlayerScreen(
                     label = "Track Transition",
                     modifier = Modifier.weight(1f)
                 ) { targetTrack ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        if (!showLyricsMode) {
+                    Crossfade(
+                        targetState = showLyricsMode,
+                        label = "LyricsModeToggle",
+                        modifier = Modifier.fillMaxSize()
+                    ) { isLyricsMode ->
+                        if (!isLyricsMode) {
                             // ==================== ALBUM ART MODE ====================
                             // 1:1 Square Album Art Area with Action Buttons overlaid at bottom
-                            Box(
-                                modifier = Modifier
-                                    .padding(top = 4.dp)
-                                    .fillMaxWidth(0.96f)
-                                    .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(Color(0x1AFFFFFF))
-                            ) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    when {
-                                        artworkBitmap != null -> {
-                                            Image(
-                                                bitmap = artworkBitmap!!,
-                                                contentDescription = targetTrack?.title,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        }
-                                        targetTrack?.albumArtUri != null -> {
-                                            AsyncImage(
-                                                model = targetTrack.albumArtUri,
-                                                contentDescription = targetTrack.title,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        }
-                                        else -> {
-                                            Icon(
-                                                imageVector = Icons.Default.MusicNote,
-                                                contentDescription = null,
-                                                tint = Color.Gray,
-                                                modifier = Modifier.size(96.dp)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Action Icons Row overlaid at the bottom of the album art
-                                Row(
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Box(
                                     modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .fillMaxWidth()
-                                        .background(
-                                            androidx.compose.ui.graphics.Brush.verticalGradient(
-                                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
-                                            )
-                                        )
-                                        .padding(vertical = 10.dp, horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .fillMaxWidth(0.96f)
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0x1AFFFFFF))
                                 ) {
-                                    IconButton(onClick = onFavoriteToggle, modifier = Modifier.testTag("player_favorite_btn")) {
-                                        Icon(
-                                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                            contentDescription = "Favorite",
-                                            tint = if (isFavorite) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.85f),
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-
-                                    IconButton(onClick = onDislikeToggle) {
-                                        Icon(
-                                            imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
-                                            contentDescription = "Dislike",
-                                            tint = if (isDisliked) Color(0xFFEF4444) else Color.White.copy(alpha = 0.85f),
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-
-                                    IconButton(onClick = { showAddToPlaylistModal = true }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Add,
-                                            contentDescription = "Add to playlist",
-                                            tint = Color.White.copy(alpha = 0.85f),
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                    }
-
-                                    // Lyrics Mic Icon Toggle
-                                    Box(
-                                        modifier = Modifier
-                                            .size(42.dp)
-                                            .clip(CircleShape)
-                                            .background(if (showLyricsMode) Color.White.copy(alpha = 0.35f) else Color.Transparent)
-                                            .clickable { showLyricsMode = !showLyricsMode },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Mic,
-                                            contentDescription = "Lyrics",
-                                            tint = if (showLyricsMode) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.85f),
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-
-                                    IconButton(onClick = onOpenQueue, modifier = Modifier.testTag("player_queue_btn")) {
-                                        Icon(
-                                            imageVector = Icons.Default.QueueMusic,
-                                            contentDescription = "Queue",
-                                            tint = Color.White.copy(alpha = 0.85f),
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                if (targetTrack != null) {
+                                    com.example.ui.components.TrackImage(
+                                        track = targetTrack,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(96.dp)
+                                    )
                                 }
                             }
 
-                            // Live Synchronized Lyrics snippet below the album art
-                            LiveSyncedLyricSnippet(
-                                parsedLyrics = parsedLyrics,
-                                rawLyrics = targetTrack?.lyrics ?: "",
-                                currentPositionMs = currentPositionMs,
-                                onClick = { showLyricsMode = !showLyricsMode },
+                            // Action Icons Row overlaid at the bottom of the album art
+                            Row(
                                 modifier = Modifier
+                                    .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .heightIn(min = 36.dp, max = 50.dp)
-                                    .padding(top = 2.dp, bottom = 2.dp)
-                            )
-                        } else {
-                            // ==================== LYRICS VIEW MODE ====================
-                            // Cover is hidden! Full lyrics view occupies the center stage
+                                    .background(
+                                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.70f))
+                                        )
+                                    )
+                                    .padding(vertical = 8.dp, horizontal = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = onFavoriteToggle, modifier = Modifier.testTag("player_favorite_btn")) {
+                                    Icon(
+                                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                        contentDescription = "Favorite",
+                                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+
+                                IconButton(onClick = onDislikeToggle) {
+                                    Icon(
+                                        imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
+                                        contentDescription = "Dislike",
+                                        tint = if (isDisliked) Color(0xFFEF4444) else Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+
+                                IconButton(onClick = { showAddToPlaylistModal = true }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Add to playlist",
+                                        tint = Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+
+                                // Lyrics Mic Icon Toggle
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(if (showLyricsMode) Color.White.copy(alpha = 0.35f) else Color.Transparent)
+                                        .clickable { showLyricsMode = !showLyricsMode },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mic,
+                                        contentDescription = "Lyrics",
+                                        tint = if (showLyricsMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                IconButton(onClick = onOpenQueue, modifier = Modifier.testTag("player_queue_btn")) {
+                                    Icon(
+                                        imageVector = Icons.Default.QueueMusic,
+                                        contentDescription = "Queue",
+                                        tint = Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                        }
+                        }
+                    } else {
+                        // ==================== LYRICS VIEW MODE ====================
+                        // Cover is hidden! Full lyrics view occupies the center stage
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             Box(
                                 modifier = Modifier
-                                    .padding(top = 4.dp, bottom = 4.dp)
-                                    .fillMaxWidth(0.96f)
+                                    .fillMaxWidth()
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(20.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(Color(0x14FFFFFF))
                             ) {
                                 LyricsContent(
@@ -752,11 +662,12 @@ fun PlayerScreen(
                                 )
                             }
 
-                            // Action Icons Row below lyrics so user can toggle back anytime
+                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+// Action Icons Row below lyrics so user can toggle back anytime
                             Row(
                                 modifier = Modifier
-                                    .fillMaxWidth(0.96f)
-                                    .padding(vertical = 4.dp, horizontal = 12.dp),
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp, bottom = 2.dp, start = 10.dp, end = 10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -764,8 +675,8 @@ fun PlayerScreen(
                                     Icon(
                                         imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                         contentDescription = "Favorite",
-                                        tint = if (isFavorite) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(24.dp)
+                                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
 
@@ -774,7 +685,7 @@ fun PlayerScreen(
                                         imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
                                         contentDescription = "Dislike",
                                         tint = if (isDisliked) Color(0xFFEF4444) else Color.White.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
 
@@ -783,24 +694,24 @@ fun PlayerScreen(
                                         imageVector = Icons.Default.Add,
                                         contentDescription = "Add to playlist",
                                         tint = Color.White.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(28.dp)
+                                        modifier = Modifier.size(26.dp)
                                     )
                                 }
 
                                 // Active Lyrics Mic Icon
                                 Box(
                                     modifier = Modifier
-                                        .size(42.dp)
+                                        .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFFFF5C00).copy(alpha = 0.25f))
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                                         .clickable { showLyricsMode = !showLyricsMode },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Mic,
                                         contentDescription = "Lyrics",
-                                        tint = Color(0xFFFF5C00),
-                                        modifier = Modifier.size(22.dp)
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
 
@@ -809,42 +720,65 @@ fun PlayerScreen(
                                         imageVector = Icons.Default.QueueMusic,
                                         contentDescription = "Queue",
                                         tint = Color.White.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
                         }
-
-                        // Title and Artist Centered
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
-                        ) {
-                            Text(
-                                text = targetTrack?.title ?: "",
-                                fontSize = 23.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White,
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = targetTrack?.artist ?: "",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = GlassTextSecondary,
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
+                    } }
+// end of if/else isLyricsMode
+                    } // end of Crossfade block
                 }
 
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                // Compact Live Single-Line Lyric Snippet
+                if (!showLyricsMode) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LiveSyncedLyricSnippet(
+                            parsedLyrics = parsedLyrics,
+                            rawLyrics = currentTrack?.lyrics ?: "",
+                            currentPositionMs = currentPositionMs,
+                            onClick = { showLyricsMode = true },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                // Title and Artist Centered
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 2.dp)
+                ) {
+                    Text(
+                        text = currentTrack?.title ?: "",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = currentTrack?.artist ?: "",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = GlassTextSecondary,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(28.dp))
+
                 // Progress Bar & Duration Labels (Tightly attached right below Title)
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 0.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -865,6 +799,8 @@ fun PlayerScreen(
                     )
                 }
 
+                Spacer(modifier = Modifier.height(20.dp))
+
                 // Main Playback Controls
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -875,8 +811,8 @@ fun PlayerScreen(
                         Icon(
                             imageVector = Icons.Default.Shuffle,
                             contentDescription = "Shuffle",
-                            tint = if (isShuffle) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.6f),
-                            modifier = Modifier.size(26.dp)
+                            tint = if (isShuffle) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(24.dp)
                         )
                     }
 
@@ -885,13 +821,13 @@ fun PlayerScreen(
                             imageVector = Icons.Default.SkipPrevious,
                             contentDescription = "Previous",
                             tint = Color.White,
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(36.dp)
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .size(64.dp)
+                            .size(60.dp)
                             .clickable { onPlayPauseToggle() }
                             .testTag("player_main_play_btn"),
                         contentAlignment = Alignment.Center
@@ -900,7 +836,7 @@ fun PlayerScreen(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Play/Pause",
                             tint = Color.White,
-                            modifier = Modifier.size(64.dp)
+                            modifier = Modifier.size(54.dp)
                         )
                     }
 
@@ -909,7 +845,7 @@ fun PlayerScreen(
                             imageVector = Icons.Default.SkipNext,
                             contentDescription = "Next",
                             tint = Color.White,
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(36.dp)
                         )
                     }
 
@@ -917,21 +853,33 @@ fun PlayerScreen(
                         Icon(
                             imageVector = if (loopMode == LoopMode.REPEAT_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
                             contentDescription = "Repeat",
-                            tint = if (loopMode != LoopMode.OFF) Color(0xFFFF5C00) else Color.White.copy(alpha = 0.6f),
-                            modifier = Modifier.size(26.dp)
+                            tint = if (loopMode != LoopMode.OFF) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(34.dp))
+}
             }
+            
+            // Bottom Artist Info Tab
+            if (!isLandscape) {
+                ArtistInfoTab(
+                    track = currentTrack,
+                    artistInfo = artistInfo,
+                    language = settings.appLanguage,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
+        }
         }
 
         // Modal to add song to custom playlists
         if (showAddToPlaylistModal) {
             ModalBottomSheet(
                 onDismissRequest = { showAddToPlaylistModal = false },
-                containerColor = Color(0x1AFFFFFF)
+                containerColor = Color(0xFF1E1E1E) // Solid dark background for readability
             ) {
                 Column(
                     modifier = Modifier
@@ -954,7 +902,7 @@ fun PlayerScreen(
                                     onAddToPlaylist(playlistName)
                                     showAddToPlaylistModal = false
                                 },
-                            colors = CardDefaults.cardColors(containerColor = Color(0x1AFFFFFF))
+                            colors = CardDefaults.cardColors(containerColor = Color(0x2AFFFFFF))
                         ) {
                             Text(
                                 text = playlistName,
@@ -978,91 +926,48 @@ fun LiveSyncedLyricSnippet(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    if (parsedLyrics.isEmpty()) return
+
     val activeIndex = remember(currentPositionMs, parsedLyrics) {
         LrcParser.getCurrentLineIndex(parsedLyrics, currentPositionMs)
     }
 
-    val currentLineText = remember(activeIndex, parsedLyrics, rawLyrics) {
-        when {
-            parsedLyrics.isNotEmpty() && activeIndex in parsedLyrics.indices -> parsedLyrics[activeIndex].text
-            parsedLyrics.isNotEmpty() && activeIndex < 0 -> parsedLyrics.firstOrNull()?.text ?: ""
-            rawLyrics.isNotBlank() -> rawLyrics.lines().firstOrNull { it.isNotBlank() } ?: ""
-            else -> ""
+    val currentLineText = remember(activeIndex, parsedLyrics) {
+        if (activeIndex in parsedLyrics.indices) {
+            parsedLyrics[activeIndex].text.trim()
+        } else {
+            ""
         }
     }
 
-    val nextLineText = remember(activeIndex, parsedLyrics) {
-        if (parsedLyrics.isNotEmpty() && activeIndex + 1 in parsedLyrics.indices) {
-            parsedLyrics[activeIndex + 1].text
-        } else null
-    }
+    if (currentLineText.isBlank()) return
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(8.dp))
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (currentLineText.isNotBlank()) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                AnimatedContent(
-                    targetState = currentLineText,
-                    transitionSpec = {
-                        (slideInVertically { height -> height / 2 } + fadeIn()).togetherWith(
-                            slideOutVertically { height -> -height / 2 } + fadeOut()
-                        )
-                    },
-                    label = "LiveLyricLine"
-                ) { targetLine ->
-                    Text(
-                        text = targetLine,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                if (nextLineText != null) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = nextLineText,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White.copy(alpha = 0.45f),
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.35f),
-                    modifier = Modifier.size(15.dp)
+        AnimatedContent(
+            targetState = currentLineText,
+            transitionSpec = {
+                (slideInVertically { height -> height / 2 } + fadeIn()).togetherWith(
+                    slideOutVertically { height -> -height / 2 } + fadeOut()
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "♪ • ♪ • ♪",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White.copy(alpha = 0.35f),
-                    letterSpacing = 2.sp
-                )
-            }
+            },
+            label = "LiveLyricLine"
+        ) { targetLine ->
+            Text(
+                text = targetLine,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -1127,7 +1032,7 @@ fun LyricsContent(
         val listState = rememberLazyListState()
 
         LaunchedEffect(activeIndex) {
-            if (activeIndex >= 0) {
+            if (activeIndex >= 0 && !listState.isScrollInProgress) {
                 val targetIndex = (activeIndex - 2).coerceAtLeast(0)
                 listState.animateScrollToItem(targetIndex)
             }
@@ -1142,18 +1047,30 @@ fun LyricsContent(
         ) {
             itemsIndexed(items = parsedLyrics) { idx, line ->
                 val isActive = idx == activeIndex
+                val animatedColor by androidx.compose.animation.animateColorAsState(
+                    targetValue = if (isActive) androidx.compose.material3.MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.4f),
+                    animationSpec = androidx.compose.animation.core.tween(500, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                    label = "lyrics_color"
+                )
+                val animatedScale by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = if (isActive) 1.15f else 0.95f,
+                    animationSpec = androidx.compose.animation.core.tween(500, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                    label = "lyrics_scale"
+                )
                 Text(
                     text = line.text,
-                    fontSize = if (isActive) 21.sp else 16.sp,
-                    lineHeight = if (isActive) 28.sp else 22.sp,
-                    fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
-                    color = if (isActive) Color(0xFFFF9E66) else Color.White.copy(alpha = 0.4f),
+                    fontSize = 18.sp,
+                    lineHeight = 24.sp,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                    color = animatedColor,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .graphicsLayer { scaleX = animatedScale; scaleY = animatedScale }
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { onSeek(line.timeMs) }
-                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
         }

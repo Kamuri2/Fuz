@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.clickable
 
 import androidx.compose.foundation.layout.Arrangement
@@ -135,7 +136,7 @@ fun PlaylistsScreen(
 
             Button(
                 onClick = { showCreateDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5C00)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.Black)
@@ -173,7 +174,7 @@ fun PlaylistsScreen(
                                 newPlaylistName = ""
                                 showCreateDialog = false
                             }
-                        }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5C00))) {
+                        }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
                             Text(com.example.ui.Translations.get(settings.appLanguage, "save"), color = Color.Black)
                         }
                     }
@@ -202,7 +203,7 @@ fun PlaylistsScreen(
                 Icon(
                     imageVector = Icons.Default.Favorite,
                     contentDescription = null,
-                    tint = Color(0xFFFF5C00),
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(36.dp)
                 )
                 Spacer(modifier = Modifier.width(16.dp))

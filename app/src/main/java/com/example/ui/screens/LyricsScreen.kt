@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -53,7 +54,7 @@ import com.example.ui.components.GlassCard
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextPrimary
 import com.example.ui.theme.GlassTextSecondary
-import com.example.ui.theme.OrangeAccent
+
 import com.example.ui.theme.OrangeGlow
 import com.example.ui.theme.PurpleAccent
 
@@ -105,7 +106,7 @@ fun LyricsScreen(
                 Icon(
                     imageVector = Icons.Default.Lyrics,
                     contentDescription = null,
-                    tint = OrangeAccent,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -128,7 +129,7 @@ fun LyricsScreen(
                 Icon(
                     imageVector = Icons.Default.Edit,
                     contentDescription = "Editar Letras",
-                    tint = OrangeAccent
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -155,7 +156,7 @@ fun LyricsScreen(
                         Icon(
                             imageVector = Icons.Default.MusicNote,
                             contentDescription = null,
-                            tint = OrangeAccent,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(48.dp)
                         )
                         Spacer(modifier = Modifier.height(12.dp))
@@ -176,7 +177,7 @@ fun LyricsScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { showEditSheet = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Text("Agregar Letras Manualmente", color = Color.Black, fontWeight = FontWeight.Bold)
                         }
@@ -194,7 +195,7 @@ fun LyricsScreen(
                     val isActive = index == activeLineIndex
 
                     val textColor by animateColorAsState(
-                        targetValue = if (isActive) OrangeAccent else GlassTextSecondary,
+                        targetValue = if (isActive) MaterialTheme.colorScheme.primary else GlassTextSecondary,
                         animationSpec = tween(300),
                         label = "lyrics_color"
                     )
@@ -204,9 +205,9 @@ fun LyricsScreen(
                             .fillMaxWidth()
                             .testTag("lyric_line_$index"),
                         shape = RoundedCornerShape(16.dp),
-                        backgroundColor = if (isActive) Color(0x35FF5C00) else Color(0x10FFFFFF),
-                        borderColor = if (isActive) OrangeAccent else Color.White.copy(alpha = 0.15f),
-                        glowColor = if (isActive) OrangeAccent else null,
+                        backgroundColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color(0x10FFFFFF),
+                        borderColor = if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.15f),
+                        glowColor = if (isActive) MaterialTheme.colorScheme.primary else null,
                         onClick = {
                             if (line.timestampMs > 0) {
                                 onSeek(line.timestampMs)
@@ -257,7 +258,7 @@ fun LyricsScreen(
                     text = "Editar Letras de la Canción",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = OrangeAccent
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -274,7 +275,7 @@ fun LyricsScreen(
                     minLines = 8,
                     maxLines = 12,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = OrangeAccent,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White
@@ -293,7 +294,7 @@ fun LyricsScreen(
                             onSaveCustomLyrics(editableLyricsText)
                             showEditSheet = false
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Text("Guardar Letras", color = Color.Black, fontWeight = FontWeight.Bold)
                     }

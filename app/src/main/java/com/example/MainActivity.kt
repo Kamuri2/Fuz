@@ -117,9 +117,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::playerManager.isInitialized) {
-            playerManager.release()
-        }
+        // Do not release playerManager here, so music can continue playing in the background
     }
 }
 
@@ -203,6 +201,18 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
             permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true
         }
         if (isGranted) {
+            // Also attempt to get deep file manager permission on newer devices for absolute path access
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !android.os.Environment.isExternalStorageManager()) {
+                try {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.data = android.net.Uri.parse("package:" + context.packageName)
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    context.startActivity(intent)
+                }
+            }
+            
             coroutineScope.launch(Dispatchers.IO) {
                 val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
                 if (deviceTracks.isNotEmpty()) {
@@ -224,6 +234,18 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
             ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
         }
         if (hasPermission) {
+            // Also attempt to request deep access at startup if not granted
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !android.os.Environment.isExternalStorageManager()) {
+                try {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.data = android.net.Uri.parse("package:" + context.packageName)
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    context.startActivity(intent)
+                }
+            }
+
             // Check if we already have cached tracks, if so, we can optionally scan in background and merge,
             // but for now let's just do it in IO to prevent ANR.
             kotlinx.coroutines.withContext(Dispatchers.IO) {
@@ -434,15 +456,7 @@ fun MiniPlayerBar(
 ) {
     if (track == null) return
 
-    val artworkBitmap = remember(track.albumArtBytes) {
-        track.albumArtBytes?.let { bytes ->
-            try {
-                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
+    val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
 
     Box(
         modifier = Modifier

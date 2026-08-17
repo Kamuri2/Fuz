@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.material3.MaterialTheme
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -227,7 +228,7 @@ fun HomeScreen(
                     
                     Button(
                         onClick = onPickFolder,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5C00)),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(20.dp),
                         modifier = Modifier.fillMaxWidth(0.85f)
                     ) {
@@ -273,15 +274,7 @@ private fun HomeTrackCardItem(
     isCurrent: Boolean,
     onClick: () -> Unit
 ) {
-    val artworkBitmap = remember(track.albumArtBytes) {
-        track.albumArtBytes?.let { bytes ->
-            try {
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
+    val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
 
     Row(
         modifier = Modifier
@@ -299,7 +292,6 @@ private fun HomeTrackCardItem(
             contentAlignment = Alignment.Center
         ) {
             when {
-                artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 track.albumArtUri != null -> AsyncImage(model = track.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 else -> Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
             }

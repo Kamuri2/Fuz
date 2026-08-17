@@ -33,7 +33,7 @@ data class TrackEntity(
             durationMs = durationMs,
             contentUri = Uri.parse(contentUri),
             albumArtUri = albumArtUri?.let { Uri.parse(it) },
-            albumArtBytes = null,
+            
             trackNumber = trackNumber,
             year = year,
             fileSizeFormatted = fileSizeFormatted,

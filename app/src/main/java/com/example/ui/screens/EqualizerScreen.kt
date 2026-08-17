@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,7 +36,7 @@ import com.example.ui.components.LiquidEqualizerView
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextPrimary
 import com.example.ui.theme.GlassTextSecondary
-import com.example.ui.theme.OrangeAccent
+
 import com.example.ui.theme.OrangeGlow
 import com.example.ui.theme.PurpleAccent
 
@@ -97,7 +98,7 @@ fun EqualizerScreen(
                         text = "Frecuencia de Salida",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = OrangeAccent
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Text(
                         text = selectedPreset.displayName,
@@ -123,7 +124,7 @@ fun EqualizerScreen(
                     Icon(
                         imageVector = Icons.Default.VolumeUp,
                         contentDescription = null,
-                        tint = OrangeAccent
+                        tint = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.size(8.dp))
                     Text(
@@ -138,8 +139,8 @@ fun EqualizerScreen(
                     value = volume,
                     onValueChange = onVolumeChange,
                     colors = SliderDefaults.colors(
-                        thumbColor = OrangeAccent,
-                        activeTrackColor = OrangeAccent,
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
                         inactiveTrackColor = Color.White.copy(alpha = 0.15f)
                     )
                 )

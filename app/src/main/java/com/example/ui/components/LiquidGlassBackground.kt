@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.material3.MaterialTheme
 import android.graphics.BitmapFactory
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -29,7 +30,7 @@ import coil.compose.AsyncImage
 import com.example.model.Track
 import com.example.ui.theme.AmberGlow
 import com.example.ui.theme.LiquidDarkBg
-import com.example.ui.theme.OrangeAccent
+
 import com.example.ui.theme.PurpleAccent
 import kotlin.math.cos
 import kotlin.math.sin
@@ -39,7 +40,7 @@ fun LiquidGlassBackground(
     isPlaying: Boolean,
     currentTrack: Track? = null,
     modifier: Modifier = Modifier,
-    primaryGlowColor: Color = OrangeAccent,
+    primaryGlowColor: Color = MaterialTheme.colorScheme.primary,
     secondaryGlowColor: Color = PurpleAccent,
     content: @Composable () -> Unit
 ) {
@@ -80,15 +81,7 @@ fun LiquidGlassBackground(
     val bgOffsetX = sin(orb1Offset) * 25f
     val bgOffsetY = cos(orb2Offset) * 25f
 
-    val artworkBitmap = remember(currentTrack?.albumArtBytes) {
-        currentTrack?.albumArtBytes?.let { bytes ->
-            try {
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
+    val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
 
     Box(
         modifier = modifier

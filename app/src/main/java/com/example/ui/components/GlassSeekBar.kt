@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextSecondary
-import com.example.ui.theme.OrangeAccent
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,8 +39,8 @@ fun GlassSeekBar(
                 onSeek((fraction * durationMs).toLong())
             },
             colors = SliderDefaults.colors(
-                thumbColor = OrangeAccent,
-                activeTrackColor = OrangeAccent,
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
                 inactiveTrackColor = Color.White.copy(alpha = 0.15f)
             ),
             modifier = Modifier.fillMaxWidth()

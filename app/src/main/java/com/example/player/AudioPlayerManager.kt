@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 enum class LoopMode {
@@ -47,11 +48,36 @@ class AudioPlayerManager private constructor(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("app_settings_prefs", android.content.Context.MODE_PRIVATE)
 
+
+
+
     private var mediaPlayer: MediaPlayer? = null
     private var fadingPlayer: MediaPlayer? = null
     private var activeSessionId = 0L
     private var autoAdvanceTriggeredSessionId = -1L
     private val scope = CoroutineScope(Dispatchers.Main + Job())
+
+    init {
+        scope.launch {
+            val lastTrackId = prefs.getLong("last_track_id", -1L)
+            if (lastTrackId != -1L) {
+                try {
+                    // Wait for tracks to be loaded
+                    val tracks = com.example.data.TrackRepository.tracks.first { it.isNotEmpty() }
+                    if (_currentTrack.value == null) {
+                        val lastTrack = tracks.find { it.id == lastTrackId }
+                        if (lastTrack != null) {
+                            _playlist.value = listOf(lastTrack)
+                            _currentIndex.value = 0
+                            _currentTrack.value = lastTrack
+                            _durationMs.value = lastTrack.durationMs
+                        }
+                    }
+                } catch (e: Exception) {}
+            }
+        }
+    }
+
     private var progressJob: Job? = null
     private var sleepTimerJob: Job? = null
 
@@ -85,6 +111,15 @@ class AudioPlayerManager private constructor(private val context: Context) {
 
     private val _favorites = MutableStateFlow<Set<Long>>(loadFavorites())
     val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
+
+
+    private fun saveLastTrackId(trackId: Long?) {
+        try {
+            if (trackId != null) {
+                prefs.edit().putLong("last_track_id", trackId).apply()
+            }
+        } catch (e: Exception) {}
+    }
 
     private fun loadFavorites(): Set<Long> {
         return try {
@@ -325,6 +360,7 @@ class AudioPlayerManager private constructor(private val context: Context) {
                 val track = tracks[startTrackIndex]
                 _currentIndex.value = startTrackIndex
                 _currentTrack.value = track
+        saveLastTrackId(track.id)
                 try {
                     mediaPlayer?.reset()
                     mediaPlayer?.setDataSource(context, track.contentUri)
@@ -352,6 +388,7 @@ class AudioPlayerManager private constructor(private val context: Context) {
         val track = tracks[index]
         _currentIndex.value = index
         _currentTrack.value = track
+        saveLastTrackId(track.id)
 
         val currentSession = ++activeSessionId
 
@@ -498,7 +535,16 @@ class AudioPlayerManager private constructor(private val context: Context) {
     }
 
     fun togglePlayPause() {
-        val mp = mediaPlayer ?: return
+        val mp = mediaPlayer
+        if (mp == null) {
+            // If the player is null but we have a track in the playlist, try to play it
+            if (_currentIndex.value in _playlist.value.indices) {
+                playTrackAtIndex(_currentIndex.value)
+            } else if (_playlist.value.isNotEmpty()) {
+                playTrackAtIndex(0)
+            }
+            return
+        }
         if (_currentTrack.value == null && _playlist.value.isNotEmpty()) {
             playTrackAtIndex(0)
             return

@@ -12,6 +12,10 @@ import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import org.jaudiotagger.tag.Tag
 import org.jaudiotagger.tag.TagTextField
+import org.jaudiotagger.tag.id3.ID3v24Tag
+import org.jaudiotagger.tag.id3.ID3v23Tag
+import org.jaudiotagger.tag.id3.framebody.FrameBodySYLT
+import org.jaudiotagger.tag.id3.AbstractID3v2Frame
 import java.io.File
 import java.io.FileOutputStream
 import java.util.logging.Level
@@ -70,7 +74,7 @@ object MetadataReader {
                 Log.d(TAG, "Extractor error: ${e.message}")
             }
 
-            var artworkBytes = retriever.embeddedPicture
+            var artworkBytes: ByteArray? = null // Removed from Track to save RAM
             var extractedLyrics = ""
 
             // 1. Extracción profunda con JAudioTagger (MP3, FLAC, M4A, OGG, OPUS, WAV, AAC)
@@ -145,6 +149,9 @@ object MetadataReader {
                 Log.d(TAG, "JAudioTagger extraction note: ${e.message}")
             }
 
+            if (artworkBytes == null) {
+                artworkBytes = retriever.embeddedPicture
+            }
             // 2. Intento nativo de Android como respaldo (MediaMetadataRetriever)
             if (extractedLyrics.isBlank()) {
                 try {
@@ -158,20 +165,13 @@ object MetadataReader {
             }
 
             // 3. Buscar archivos sueltos (.lrc / .txt) en la misma carpeta
-            if (extractedLyrics.isBlank() && track.path.isNotBlank() && !track.path.startsWith("content://")) {
-                extractedLyrics = searchSidecarLyrics(track.path)
-            }
-
-            // 4. Fallback a API de Internet (LrcLib) si no hay letras locales
-            if (extractedLyrics.isBlank()) {
-                val fetched = LrcLibHelper.fetchLyrics(
-                    title = title,
-                    artist = artist,
-                    album = album,
-                    durationSec = durationMs / 1000
-                )
-                if (fetched != null) {
-                    extractedLyrics = fetched
+            val isSyncedLocal = extractedLyrics.contains(Regex("(\\[|<)\\d{1,3}:\\d{1,2}"))
+            if (!isSyncedLocal && track.path.isNotBlank() && !track.path.startsWith("content://")) {
+                val sidecar = searchSidecarLyrics(track.path)
+                if (sidecar.contains(Regex("(\\[|<)\\d{1,3}:\\d{1,2}"))) {
+                    extractedLyrics = sidecar
+                } else if (extractedLyrics.isBlank() && sidecar.isNotBlank()) {
+                    extractedLyrics = sidecar
                 }
             }
 
@@ -187,7 +187,7 @@ object MetadataReader {
                 genre = genre,
                 bitrate = bitrate,
                 sampleRate = sampleRate,
-                albumArtBytes = artworkBytes,
+                
                 lyrics = finalLyrics
             )
         } catch (e: Exception) {
@@ -234,8 +234,9 @@ object MetadataReader {
                 if (!lyr.isNullOrBlank()) {
                     val clean = cleanExtractedLyrics(lyr)
                     if (clean.isNotBlank()) {
-                        if (clean.contains(Regex("\\[\\d{1,2}:\\d{2}"))) {
-                            return clean // Synchronized!
+                        val converted = convertSubtitleToLrc(clean)
+                        if (converted.contains(Regex("(\\[|<)\\d{1,3}:\\d{1,2}"))) {
+                            return converted // Synchronized!
                         }
                         if (fallbackUnsynced.isBlank()) {
                             fallbackUnsynced = clean
@@ -244,6 +245,46 @@ object MetadataReader {
                 }
             }
         } catch (e: Exception) {}
+
+
+        // 1.5. Check for SYLT (Synchronized Lyrics Text)
+        try {
+            if (tag is ID3v24Tag || tag is ID3v23Tag) {
+                val abstractTag = tag as org.jaudiotagger.tag.id3.AbstractID3v2Tag
+                if (abstractTag.hasFrame("SYLT")) {
+                    val syltFrames = abstractTag.getFrame("SYLT")
+                    if (syltFrames is List<*>) {
+                        for (frame in syltFrames) {
+                            if (frame is AbstractID3v2Frame) {
+                                val body = frame.body
+                                if (body is FrameBodySYLT) {
+                                    val lyricsBytes = body.lyrics
+                                    if (lyricsBytes != null && lyricsBytes.isNotEmpty()) {
+                                        val parsedSylt = parseSyltToLrc(lyricsBytes)
+                                        if (parsedSylt.isNotBlank()) {
+                                            return parsedSylt
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if (syltFrames is AbstractID3v2Frame) {
+                        val body = syltFrames.body
+                        if (body is FrameBodySYLT) {
+                            val lyricsBytes = body.lyrics
+                            if (lyricsBytes != null && lyricsBytes.isNotEmpty()) {
+                                val parsedSylt = parseSyltToLrc(lyricsBytes)
+                                if (parsedSylt.isNotBlank()) {
+                                    return parsedSylt
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Failed to parse SYLT: ${e.message}")
+        }
 
         // 2. Iterate ALL fields in the tag
         try {
@@ -263,16 +304,17 @@ object MetadataReader {
                 if (content.isNotBlank()) {
                     // Check if field is lyrics-related or contains timestamp lyrics
                     val isLyricField = id.contains("LYRIC") || id.contains("LRC") || id.contains("SYLT") || 
-                                       id.contains("USLT") || id.contains("TEXT") || id.contains("©LYR") ||
+                                       id.contains("USLT") || id.contains("TEXT") || id.contains("LYR") ||
                                        id.contains("TXXX") || id.contains("COMM")
 
-                    val hasSyncedTimestamps = content.contains(Regex("\\[\\d{1,2}:\\d{2}"))
+                    val hasSyncedTimestamps = content.contains(Regex("(\\[|<)\\d{1,3}:\\d{1,2}"))
 
                     if (isLyricField || hasSyncedTimestamps) {
                         val cleaned = cleanExtractedLyrics(content)
                         if (cleaned.isNotBlank()) {
-                            if (hasSyncedTimestamps) {
-                                return cleaned // Return immediately if synchronized
+                            val converted = convertSubtitleToLrc(cleaned)
+                            if (converted.contains(Regex("(\\[|<)\\d{1,3}:\\d{1,2}"))) {
+                                return converted
                             }
                             if (fallbackUnsynced.isBlank()) {
                                 fallbackUnsynced = cleaned
@@ -287,10 +329,12 @@ object MetadataReader {
 
         // 3. Fallback candidate keys lookup
         val candidateKeys = listOf(
-            "SYNCEDLYRICS", "SYNCED LYRICS", "TXXX:SYNCEDLYRICS", "TXXX:SYNCED LYRICS",
+            "SYLT", "SYNCEDLYRICS", "SYNCED LYRICS", "TXXX:SYNCEDLYRICS", "TXXX:SYNCED LYRICS",
             "TXXX:LRC", "LYRICS_SYNCED", "USLT", "UNSYNCEDLYRICS", "UNSYNCED LYRICS",
             "TXXX:UNSYNCEDLYRICS", "TXXX:LYRICS", "LYRICS", "Lyrics", "©lyr", "TEXT",
-            "----:com.apple.iTunes:SYNCEDLYRICS", "----:com.apple.iTunes:LYRICS"
+            "----:com.apple.iTunes:SYNCEDLYRICS", "----:com.apple.iTunes:LYRICS",
+            "lyrics", "unsynced lyrics", "synced lyrics", "SYLT:Lyrics", "USLT:Lyrics",
+            "COMM", "TXXX"
         )
 
         for (key in candidateKeys) {
@@ -299,7 +343,8 @@ object MetadataReader {
                 if (!value.isNullOrBlank()) {
                     val clean = cleanExtractedLyrics(value)
                     if (clean.isNotBlank()) {
-                        if (clean.contains(Regex("\\[\\d{1,2}:\\d{2}"))) return clean
+                        val converted = convertSubtitleToLrc(clean)
+                        if (converted.contains(Regex("(\\[|<)\\d{1,3}:\\d{1,2}"))) return converted
                         if (fallbackUnsynced.isBlank()) fallbackUnsynced = clean
                     }
                 }
@@ -339,10 +384,12 @@ object MetadataReader {
                 if (f.isFile) {
                     val fName = f.name.lowercase()
                     val fBase = f.nameWithoutExtension.lowercase()
-                    if ((fBase == nameWithoutExt || fName == "$nameWithoutExt.lrc" || fName == "$nameWithoutExt.txt") &&
-                        (fName.endsWith(".lrc") || fName.endsWith(".txt"))) {
+                    if ((fBase == nameWithoutExt || fName == "$nameWithoutExt.lrc" || fName == "$nameWithoutExt.txt" || fName == "$nameWithoutExt.srt" || fName == "$nameWithoutExt.vtt") &&
+                        (fName.endsWith(".lrc") || fName.endsWith(".txt") || fName.endsWith(".srt") || fName.endsWith(".vtt"))) {
                         val text = readFileWithCharsetDetection(f)
-                        if (text.isNotBlank()) return text.trim()
+                        if (text.isNotBlank()) {
+                            return convertSubtitleToLrc(text.trim())
+                        }
                     }
                 }
             }
@@ -433,3 +480,80 @@ object MetadataReader {
         return cleaned
     }
 }
+
+
+    private fun parseSyltToLrc(lyricsBytes: ByteArray): String {
+        try {
+            val builder = java.lang.StringBuilder()
+            var offset = 0
+            while (offset < lyricsBytes.size) {
+                // Find end of text string (null terminated)
+                var textEnd = offset
+                while (textEnd < lyricsBytes.size && lyricsBytes[textEnd].toInt() != 0) {
+                    textEnd++
+                }
+                if (textEnd >= lyricsBytes.size) break
+                
+                val text = String(lyricsBytes, offset, textEnd - offset, Charsets.UTF_8).trim()
+                
+                // Timestamp is 4 bytes integer after the null terminator
+                offset = textEnd + 1
+                if (offset + 3 < lyricsBytes.size) {
+                    val t1 = lyricsBytes[offset].toInt() and 0xFF
+                    val t2 = lyricsBytes[offset + 1].toInt() and 0xFF
+                    val t3 = lyricsBytes[offset + 2].toInt() and 0xFF
+                    val t4 = lyricsBytes[offset + 3].toInt() and 0xFF
+                    val timestampMs = (t1 shl 24) or (t2 shl 16) or (t3 shl 8) or t4
+                    
+                    val minutes = timestampMs / 60000
+                    val seconds = (timestampMs % 60000) / 1000
+                    val hundreths = (timestampMs % 1000) / 10
+                    
+                    val timeStr = String.format("[%02d:%02d.%02d]", minutes, seconds, hundreths)
+                    if (text.isNotBlank()) {
+                        builder.append(timeStr).append(text).append("\n")
+                    }
+                    offset += 4
+                } else {
+                    break
+                }
+            }
+            return builder.toString().trim()
+        } catch (e: Exception) {
+            return ""
+        }
+    }
+
+
+    private fun convertSubtitleToLrc(content: String): String {
+        if (content.contains(Regex("(\\[|<)\\d{1,3}:\\d{1,2}"))) {
+            return content
+        }
+        
+        val builder = StringBuilder()
+        val lines = content.lines()
+        val timeRegex = Regex("(?:\\d{2}:)?(\\d{2}):(\\d{2})[,.](\\d{2,3})\\s*-->.*")
+        var currentTimestamp = ""
+        
+        for (line in lines) {
+            val match = timeRegex.find(line)
+            if (match != null) {
+                val min = match.groupValues[1]
+                val sec = match.groupValues[2]
+                var milli = match.groupValues[3]
+                if (milli.length == 3) milli = milli.substring(0, 2)
+                currentTimestamp = "[$min:$sec.$milli]"
+            } else if (line.isNotBlank() && !line.matches(Regex("^\\d+$")) && !line.startsWith("WEBVTT")) {
+                if (currentTimestamp.isNotBlank()) {
+                    builder.append(currentTimestamp).append(line).append("\n")
+                    currentTimestamp = ""
+                }
+            }
+        }
+        
+        if (builder.isNotEmpty()) {
+            return builder.toString().trim()
+        }
+        
+        return content
+    }

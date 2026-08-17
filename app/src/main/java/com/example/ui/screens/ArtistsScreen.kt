@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 
+import androidx.compose.material3.MaterialTheme
 import android.content.Intent
 
 import android.graphics.BitmapFactory
@@ -240,7 +241,7 @@ fun ArtistsScreen(
                             .padding(end = 40.dp)
                             .size(60.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFFF5C00)),
+                            .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(text = currentDragLetter!!, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
@@ -317,11 +318,7 @@ fun ArtistDetailScreen(
                     .background(Color.Black)
             ) {
                 val firstTrack = tracks.firstOrNull()
-                val artworkBitmap = remember(firstTrack?.albumArtBytes) {
-                    firstTrack?.albumArtBytes?.let { bytes ->
-                        try { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() } catch (e: Exception) { null }
-                    }
-                }
+                val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
                 val fallbackImage = firstTrack?.albumArtUri
                 
                 if (artistInfo?.imageUrl != null) {
@@ -477,11 +474,7 @@ fun ArtistDetailScreen(
         }
         
         itemsIndexed(tracks) { index, track ->
-            val artworkBitmap = remember(track.albumArtBytes) {
-                track.albumArtBytes?.let { bytes ->
-                    try { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() } catch(e: Exception) { null }
-                }
-            }
+            val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
             
             Row(
                 modifier = Modifier

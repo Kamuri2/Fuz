@@ -1,0 +1,2 @@
+sed -i 's/\/\/ Action Icons Row below lyrics so user can toggle back anytime/Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {\n\/\/ Action Icons Row below lyrics so user can toggle back anytime/g' app/src/main/java/com/example/ui/screens/PlayerScreen.kt
+sed -i 's/\/\/ end of if\/else isLyricsMode/}\n\/\/ end of if\/else isLyricsMode/g' app/src/main/java/com/example/ui/screens/PlayerScreen.kt

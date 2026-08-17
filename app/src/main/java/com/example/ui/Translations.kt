@@ -22,7 +22,11 @@ object Translations {
         "save" to "Save",
         "favorite_songs" to "Favorite Songs",
         "songs_marked" to "songs marked",
-        "songs" to "songs"
+        "songs" to "songs",
+        "about_artist" to "About the artist",
+        "followers" to "Followers",
+        "origin" to "Origin",
+        "no_info_available" to "No information available."
     )
 
     val es = mapOf(
@@ -47,7 +51,11 @@ object Translations {
         "save" to "Guardar",
         "favorite_songs" to "Canciones Favoritas",
         "songs_marked" to "canciones marcadas",
-        "songs" to "canciones"
+        "songs" to "canciones",
+        "about_artist" to "Acerca del artista",
+        "followers" to "Seguidores",
+        "origin" to "Origen",
+        "no_info_available" to "No hay información disponible."
     )
 
     val fr = mapOf(
@@ -174,7 +182,11 @@ object Translations {
         "save" to "Salvar",
         "favorite_songs" to "Músicas Favoritas",
         "songs_marked" to "músicas marcadas",
-        "songs" to "músicas"
+        "songs" to "músicas",
+        "about_artist" to "Sobre o artista",
+        "followers" to "Seguidores",
+        "origin" to "Origem",
+        "no_info_available" to "Nenhuma informação disponível."
     )
     
     fun get(lang: String, key: String): String {

@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -19,7 +20,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.AmberGlow
-import com.example.ui.theme.OrangeAccent
 import com.example.ui.theme.OrangeGlow
 import com.example.ui.theme.PurpleAccent
 import kotlin.math.sin
@@ -32,7 +32,6 @@ fun LiquidEqualizerView(
     barCount: Int = 24
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "eq_waves")
-
     val animFactor by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 2f * Math.PI.toFloat(),
@@ -42,6 +41,8 @@ fun LiquidEqualizerView(
         ),
         label = "eq_factor"
     )
+
+    val primaryColor = MaterialTheme.colorScheme.primary
 
     Canvas(
         modifier = modifier
@@ -66,7 +67,7 @@ fun LiquidEqualizerView(
             val y = canvasH - baseHeight
 
             val barColor = when (i % 4) {
-                0 -> OrangeAccent
+                0 -> primaryColor
                 1 -> OrangeGlow
                 2 -> PurpleAccent
                 else -> AmberGlow
@@ -86,4 +87,3 @@ fun LiquidEqualizerView(
         }
     }
 }
-

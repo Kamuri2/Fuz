@@ -6,6 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 object LrcLibHelper {
     private const val TAG = "LrcLibHelper"
@@ -29,23 +30,61 @@ object LrcLibHelper {
             cleanTitle
         }
 
-        val searchResult = trySearch(query, cleanTitle, cleanArtist)
+        val searchResult = trySearch(query)
         if (!searchResult.isNullOrBlank()) return searchResult
 
         // 3. Fallback: Search with raw title if cleaned title differed
         if (cleanTitle != title.trim()) {
-            val rawSearchResult = trySearch(title.trim(), title.trim(), cleanArtist)
+            val rawSearchResult = trySearch(title.trim())
             if (!rawSearchResult.isNullOrBlank()) return rawSearchResult
         }
+        
+        // 4. Aggressive Fallback: Strip ALL parentheses/brackets and search again
+        val ultraCleanTitle = title.replace(Regex("\\s*\\[.*?\\]\\s*"), " ").replace(Regex("\\s*\\(.*?\\)\\s*"), " ").trim()
+        if (ultraCleanTitle.isNotBlank() && ultraCleanTitle != cleanTitle && ultraCleanTitle != title.trim()) {
+            val ultraQuery = if (cleanArtist.isNotBlank() && !isUnknownArtist(cleanArtist)) "$cleanArtist $ultraCleanTitle" else ultraCleanTitle
+            val ultraResult = trySearch(ultraQuery)
+            if (!ultraResult.isNullOrBlank()) return ultraResult
+        }
+        
+        // 5. Ultimate Fallback: Just search the clean title and take first result blindly
+        val ultimateResult = trySearch(cleanTitle)
+        if (!ultimateResult.isNullOrBlank()) return ultimateResult
+        
+        // 6. External plain lyrics fallback (lyrics.ovh)
+        if (cleanArtist.isNotBlank() && !isUnknownArtist(cleanArtist)) {
+            val ovhResult = tryOvhFallback(cleanArtist, cleanTitle)
+            if (!ovhResult.isNullOrBlank()) return ovhResult
+        }
 
+        return null
+    }
+    
+    private fun tryOvhFallback(artist: String, title: String): String? {
+        try {
+            val urlStr = "https://api.lyrics.ovh/v1/" + URLEncoder.encode(artist, "UTF-8").replace("+", "%20") + "/" + URLEncoder.encode(title, "UTF-8").replace("+", "%20")
+            val connection = URL(urlStr).openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
+
+            if (connection.responseCode == 200) {
+                val response = connection.inputStream.bufferedReader().readText()
+                val json = JSONObject(response)
+                val plain = json.optString("lyrics", "").trim()
+                if (plain.isNotBlank()) return plain
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "OVH fallback error for $title: ${e.message}")
+        }
         return null
     }
 
     private fun tryDirectGet(title: String, artist: String, album: String, durationSec: Long): String? {
         try {
-            var urlStr = "https://lrclib.net/api/get?track_name=" + Uri.encode(title) + "&artist_name=" + Uri.encode(artist)
+            var urlStr = "https://lrclib.net/api/get?track_name=" + URLEncoder.encode(title, "UTF-8").replace("+", "%20") + "&artist_name=" + URLEncoder.encode(artist, "UTF-8").replace("+", "%20")
             if (album.isNotBlank() && !album.equals("Unknown Album", ignoreCase = true)) {
-                urlStr += "&album_name=" + Uri.encode(album)
+                urlStr += "&album_name=" + URLEncoder.encode(album, "UTF-8").replace("+", "%20")
             }
             if (durationSec > 0) {
                 urlStr += "&duration=" + durationSec
@@ -54,8 +93,8 @@ object LrcLibHelper {
             val connection = URL(urlStr).openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.setRequestProperty("User-Agent", "FuzionMusicPlayer/1.0 (Android; support@example.com)")
-            connection.connectTimeout = 4000
-            connection.readTimeout = 4000
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
 
             if (connection.responseCode == 200) {
                 val response = connection.inputStream.bufferedReader().readText()
@@ -71,44 +110,36 @@ object LrcLibHelper {
         return null
     }
 
-    private fun trySearch(query: String, expectedTitle: String, expectedArtist: String): String? {
+    private fun trySearch(query: String): String? {
         try {
-            val urlStr = "https://lrclib.net/api/search?q=" + Uri.encode(query)
+            val urlStr = "https://lrclib.net/api/search?q=" + URLEncoder.encode(query, "UTF-8").replace("+", "%20")
             val connection = URL(urlStr).openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.setRequestProperty("User-Agent", "FuzionMusicPlayer/1.0 (Android; support@example.com)")
-            connection.connectTimeout = 4000
-            connection.readTimeout = 4000
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
 
             if (connection.responseCode == 200) {
                 val response = connection.inputStream.bufferedReader().readText()
                 val jsonArray = JSONArray(response)
                 if (jsonArray.length() == 0) return null
 
-                var bestSynced: String? = null
-                var bestPlain: String? = null
+                // We want the most relevant result (first one) that has synced lyrics.
+                // If none have synced, we take the first plain lyrics.
+                var firstPlain: String? = null
 
                 for (i in 0 until jsonArray.length()) {
                     val item = jsonArray.getJSONObject(i)
                     val synced = item.optString("syncedLyrics", "").trim()
                     val plain = item.optString("plainLyrics", "").trim()
-                    val trackName = item.optString("trackName", "").trim()
-                    val artistName = item.optString("artistName", "").trim()
 
-                    val matchesTitle = trackName.contains(expectedTitle, ignoreCase = true) || expectedTitle.contains(trackName, ignoreCase = true)
-                    val matchesArtist = expectedArtist.isBlank() || isUnknownArtist(expectedArtist) || 
-                                        artistName.contains(expectedArtist, ignoreCase = true) || expectedArtist.contains(artistName, ignoreCase = true)
-
-                    if (matchesTitle && (matchesArtist || expectedArtist.isBlank())) {
-                        if (synced.isNotBlank()) return synced
-                        if (bestPlain == null && plain.isNotBlank()) bestPlain = plain
-                    } else {
-                        if (bestSynced == null && synced.isNotBlank()) bestSynced = synced
-                        if (bestPlain == null && plain.isNotBlank()) bestPlain = plain
+                    if (synced.isNotBlank()) return synced
+                    if (firstPlain == null && plain.isNotBlank()) {
+                        firstPlain = plain
                     }
                 }
-
-                return bestSynced ?: bestPlain
+                
+                return firstPlain
             }
         } catch (e: Exception) {
             Log.d(TAG, "Search query error for $query: ${e.message}")
@@ -131,7 +162,9 @@ object LrcLibHelper {
         t = t.replace(Regex("^[0-9]{1,3}[.\\-\\s_]+"), "")
 
         // Remove trailing tags like "(Official Video)", "[Lyrics]", "(Remastered 2021)", "(HD)"
-        t = t.replace(Regex("(?i)\\s*[\\[\\(](?:official|audio|video|lyrics|hd|4k|remaster(?:ed)?|live|bonus track)[^\\]\\)]*[\\]\\)]"), "")
+        t = t.replace(Regex("(?i)\\s*[\\[\\(](?:official|audio|video|lyrics|hd|4k|remaster(?:ed)?|live|bonus track|feat|ft)[^\\]\\)]*[\\]\\)]"), "")
+        // Remove dash tags like "- Remastered 2011"
+        t = t.replace(Regex("(?i)\\s*-\\s*(?:Remaster(?:ed)?|Live|Mono|Stereo|Bonus Track).*$"), "")
         
         return t.trim()
     }
@@ -141,6 +174,11 @@ object LrcLibHelper {
         if (isUnknownArtist(a)) return ""
         // Remove "feat. ..." or "ft. ..."
         a = a.replace(Regex("(?i)\\s+(?:feat\\.|ft\\.|featuring)\\s+.*$"), "")
+        // Keep only the primary artist for better search match (split by &, ,, or ' and ')
+        val split = a.split(Regex("[,&]|\\band\\b", RegexOption.IGNORE_CASE))
+        if (split.isNotEmpty()) {
+            a = split[0]
+        }
         return a.trim()
     }
 }

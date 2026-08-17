@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.material3.MaterialTheme
 import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
@@ -62,7 +63,7 @@ import com.example.ui.components.GlassCard
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextPrimary
 import com.example.ui.theme.GlassTextSecondary
-import com.example.ui.theme.OrangeAccent
+
 import com.example.ui.theme.OrangeGlow
 import com.example.ui.theme.PurpleAccent
 
@@ -124,12 +125,12 @@ fun LibraryScreen(
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = "Search",
-                    tint = OrangeAccent
+                    tint = MaterialTheme.colorScheme.primary
                 )
             },
             shape = RoundedCornerShape(20.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = OrangeAccent,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
                 focusedContainerColor = Color(0x1AFFFFFF),
                 unfocusedContainerColor = Color(0x12FFFFFF),
@@ -150,7 +151,7 @@ fun LibraryScreen(
         ) {
             Button(
                 onClick = onPickFolderUri,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FF5C00)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .weight(1f)
@@ -160,7 +161,7 @@ fun LibraryScreen(
                 Icon(
                     imageVector = Icons.Default.FolderOpen,
                     contentDescription = null,
-                    tint = OrangeAccent,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -208,7 +209,7 @@ fun LibraryScreen(
                     onClick = { selectedTab = tab },
                     label = { Text(label, fontSize = 12.sp) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = OrangeAccent,
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
                         selectedLabelColor = Color.Black,
                         containerColor = Color(0x1AFFFFFF),
                         labelColor = GlassTextPrimary
@@ -231,7 +232,7 @@ fun LibraryScreen(
                     Icon(
                         imageVector = Icons.Default.MusicNote,
                         contentDescription = null,
-                        tint = OrangeAccent.copy(alpha = 0.6f),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                         modifier = Modifier.size(64.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -251,7 +252,7 @@ fun LibraryScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = onLoadBuiltInSamples,
-                        colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Text("Cargar Música de Muestra", color = Color.Black, fontWeight = FontWeight.Bold)
                     }
@@ -283,21 +284,13 @@ fun TrackItemCard(
     isPlaying: Boolean,
     onSelect: () -> Unit
 ) {
-    val artworkBitmap = remember(track.albumArtBytes) {
-        track.albumArtBytes?.let { bytes ->
-            try {
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
+    val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
 
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        backgroundColor = if (isCurrent) Color(0x35FF5C00) else Color(0x18FFFFFF),
-        borderColor = if (isCurrent) OrangeAccent else Color.White.copy(alpha = 0.15f),
+        backgroundColor = if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color(0x18FFFFFF),
+        borderColor = if (isCurrent) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.15f),
         onClick = onSelect
     ) {
         Row(
@@ -335,7 +328,7 @@ fun TrackItemCard(
                         Icon(
                             imageVector = Icons.Default.MusicNote,
                             contentDescription = null,
-                            tint = OrangeAccent,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -351,7 +344,7 @@ fun TrackItemCard(
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Playing",
-                            tint = OrangeAccent,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -366,7 +359,7 @@ fun TrackItemCard(
                     text = track.title,
                     fontSize = 15.sp,
                     fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
-                    color = if (isCurrent) OrangeAccent else GlassTextPrimary,
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else GlassTextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

@@ -10,7 +10,7 @@ data class Track(
     val durationMs: Long,
     val contentUri: Uri,
     val albumArtUri: Uri? = null,
-    val albumArtBytes: ByteArray? = null,
+    
     val trackNumber: Int = 0,
     val year: Int = 0,
     val genre: String = "Unknown Genre",

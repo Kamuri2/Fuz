@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.material3.MaterialTheme
 import android.graphics.BitmapFactory
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -36,7 +37,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.model.Track
 import com.example.ui.theme.AmberGlow
-import com.example.ui.theme.OrangeAccent
+
 import com.example.ui.theme.OrangeGlow
 import com.example.ui.theme.PurpleAccent
 
@@ -61,15 +62,7 @@ fun LiquidVinylArtwork(
 
     val currentRotation = if (isPlaying) rotationAngle else 0f
 
-    val artworkBitmap = remember(track?.albumArtBytes) {
-        track?.albumArtBytes?.let { bytes ->
-            try {
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
+    val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
 
     Box(
         modifier = modifier
@@ -77,7 +70,7 @@ fun LiquidVinylArtwork(
             .shadow(
                 elevation = 24.dp,
                 shape = CircleShape,
-                ambientColor = OrangeAccent,
+                ambientColor = MaterialTheme.colorScheme.primary,
                 spotColor = PurpleAccent
             ),
         contentAlignment = Alignment.Center
@@ -97,7 +90,7 @@ fun LiquidVinylArtwork(
                         )
                     )
                 )
-                .border(2.dp, Brush.linearGradient(listOf(OrangeAccent.copy(alpha = 0.8f), PurpleAccent.copy(alpha = 0.6f))), CircleShape),
+                .border(2.dp, Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), PurpleAccent.copy(alpha = 0.6f))), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             // Concentric Vinyl Micro-Grooves
@@ -148,10 +141,10 @@ fun LiquidVinylArtwork(
                                 .background(
                                     brush = Brush.sweepGradient(
                                         colors = listOf(
-                                            OrangeAccent.copy(alpha = 0.8f),
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                                             PurpleAccent.copy(alpha = 0.9f),
                                             AmberGlow.copy(alpha = 0.8f),
-                                            OrangeAccent.copy(alpha = 0.8f)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
                                         )
                                     )
                                 ),

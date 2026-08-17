@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,7 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.player.LoopMode
-import com.example.ui.theme.OrangeAccent
+
 import com.example.ui.theme.OrangeGlow
 import com.example.ui.theme.PurpleAccent
 
@@ -63,7 +64,7 @@ fun GlassControls(
             Icon(
                 imageVector = Icons.Default.Shuffle,
                 contentDescription = "Shuffle",
-                tint = if (isShuffle) OrangeAccent else Color.White.copy(alpha = 0.4f)
+                tint = if (isShuffle) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.4f)
             )
         }
 
@@ -89,7 +90,7 @@ fun GlassControls(
                 .shadow(
                     elevation = 16.dp,
                     shape = CircleShape,
-                    ambientColor = OrangeAccent,
+                    ambientColor = MaterialTheme.colorScheme.primary,
                     spotColor = PurpleAccent
                 )
                 .clip(CircleShape)
@@ -128,7 +129,7 @@ fun GlassControls(
         ) {
             val (icon, tint) = when (loopMode) {
                 LoopMode.OFF -> Icons.Default.Repeat to Color.White.copy(alpha = 0.4f)
-                LoopMode.REPEAT_ALL -> Icons.Default.Repeat to OrangeAccent
+                LoopMode.REPEAT_ALL -> Icons.Default.Repeat to MaterialTheme.colorScheme.primary
                 LoopMode.REPEAT_ONE -> Icons.Default.RepeatOne to PurpleAccent
             }
             Icon(
