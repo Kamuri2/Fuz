@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.sp
 import com.example.model.Track
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextSecondary
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 fun FoldersScreen(
@@ -181,12 +183,26 @@ fun FoldersScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = track.title,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.White
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = track.title,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.White,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (track.lyrics.isNotBlank()) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Mic,
+                                            contentDescription = "Lyrics available",
+                                            tint = GlassTextMuted,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
                                 Text(
                                     text = track.artist,
                                     fontSize = 13.sp,

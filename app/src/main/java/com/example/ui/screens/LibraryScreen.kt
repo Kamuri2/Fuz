@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.ui.components.TrackImage
 import com.example.model.Track
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.GlassTextMuted
@@ -66,6 +67,7 @@ import com.example.ui.theme.GlassTextSecondary
 
 import com.example.ui.theme.OrangeGlow
 import com.example.ui.theme.PurpleAccent
+import androidx.compose.material.icons.filled.Mic
 
 enum class LibraryTab {
     ALL_TRACKS, FOLDERS, ALBUMS, ARTISTS, FAVORITES
@@ -308,18 +310,9 @@ fun TrackItemCard(
                 contentAlignment = Alignment.Center
             ) {
                 when {
-                    artworkBitmap != null -> {
-                        Image(
-                            bitmap = artworkBitmap,
-                            contentDescription = track.album,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                    track.albumArtUri != null -> {
-                        AsyncImage(
-                            model = track.albumArtUri,
-                            contentDescription = track.album,
+                    true -> {
+                        TrackImage(
+                            track = track,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -355,14 +348,26 @@ fun TrackItemCard(
 
             // Title, Artist, Folder info
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = track.title,
-                    fontSize = 15.sp,
-                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
-                    color = if (isCurrent) MaterialTheme.colorScheme.primary else GlassTextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = track.title,
+                        fontSize = 15.sp,
+                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
+                        color = if (isCurrent) MaterialTheme.colorScheme.primary else GlassTextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (track.lyrics.isNotBlank()) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Lyrics available",
+                            tint = GlassTextMuted,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "${track.artist} • ${track.folderName}",

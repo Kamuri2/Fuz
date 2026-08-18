@@ -75,6 +75,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
+import com.example.ui.components.TrackImage
 import com.example.data.AudioScanner
 import com.example.model.Track
 import com.example.player.AudioPlayerManager
@@ -136,7 +137,7 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
 
         // Sync with cached tracks immediately on start
         LaunchedEffect(cachedTracks) {
-            if (cachedTracks.isNotEmpty() && loadedTracks.isEmpty()) {
+            if (cachedTracks.isNotEmpty()) {
                 loadedTracks = cachedTracks
                 if (playerManager.playlist.value.isEmpty()) {
                     playerManager.setQueue(cachedTracks, 0, false)
@@ -173,12 +174,14 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
             }
             val folderTracks = AudioScanner.scanFolderUri(context, uri)
             if (folderTracks.isNotEmpty()) {
-                loadedTracks = folderTracks
-                playerManager.setQueue(folderTracks, 0, false)
                 coroutineScope.launch(Dispatchers.IO) {
-                    com.example.data.TrackRepository.saveScannedTracks(context, folderTracks)
+                    val merged = com.example.data.TrackRepository.saveScannedTracks(context, folderTracks)
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        loadedTracks = merged
+                        playerManager.setQueue(merged, 0, false)
+                        Toast.makeText(context, "Se cargaron ${merged.size} canciones", Toast.LENGTH_SHORT).show()
+                    }
                 }
-                Toast.makeText(context, "Se cargaron ${folderTracks.size} canciones", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(context, "No se encontraron archivos de audio en la carpeta", Toast.LENGTH_LONG).show()
             }
@@ -217,12 +220,6 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                 val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
                 if (deviceTracks.isNotEmpty()) {
                     com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks)
-                    kotlinx.coroutines.withContext(Dispatchers.Main) {
-                        loadedTracks = deviceTracks
-                        if (playerManager.playlist.value.isEmpty()) {
-                            playerManager.setQueue(deviceTracks, 0, false)
-                        }
-                    }
                 }
             }
         }
@@ -481,7 +478,7 @@ fun MiniPlayerBar(
             ) {
                 when {
                     artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    track.albumArtUri != null -> AsyncImage(model = track.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    true -> TrackImage(track = track, modifier = Modifier.fillMaxSize())
                     else -> Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             }

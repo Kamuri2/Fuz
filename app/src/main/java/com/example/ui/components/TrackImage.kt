@@ -1,6 +1,15 @@
 package com.example.ui.components
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -13,7 +22,6 @@ import kotlinx.coroutines.withContext
 import coil.compose.AsyncImage
 import com.example.model.Track
 import java.io.File
-import org.jaudiotagger.audio.AudioFileIO
 import android.util.LruCache
 
 object ArtworkCache {
@@ -44,69 +52,89 @@ fun TrackImage(
         if (bitmap == null && !useFallback) {
             withContext(Dispatchers.IO) {
                 try {
-                    if (track.path.isNotBlank() && !track.path.startsWith("content://")) {
-                        val file = File(track.path)
-                        if (file.exists()) {
-                            val audioFile = AudioFileIO.read(file)
-                            val rawBytes = audioFile.tag?.firstArtwork?.binaryData
-                            if (rawBytes != null) {
-                                val decoded: android.graphics.Bitmap?
-                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                                    val source = android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(rawBytes))
-                                    decoded = android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-                                        var sampleSize = 1
-                                        if (info.size.height > 800 || info.size.width > 800) {
-                                            var halfHeight = info.size.height / 2
-                                            var halfWidth = info.size.width / 2
-                                            while (halfHeight / sampleSize >= 800 && halfWidth / sampleSize >= 800) {
-                                                sampleSize *= 2
-                                            }
-                                        }
-                                        decoder.setTargetSampleSize(sampleSize)
-                                        // Avoid hardware bitmaps in cache to prevent potential issues
-                                        // decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
-                                    }
-                                } else {
-                                    val options = BitmapFactory.Options().apply {
-                                        inJustDecodeBounds = true
-                                    }
-                                    BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
-                                    
-                                    var inSampleSize = 1
-                                    if (options.outHeight > 800 || options.outWidth > 800) {
-                                        val halfHeight = options.outHeight / 2
-                                        val halfWidth = options.outWidth / 2
-                                        while (halfHeight / inSampleSize >= 800 && halfWidth / inSampleSize >= 800) {
-                                            inSampleSize *= 2
-                                        }
-                                    }
-
-                                    val finalOptions = BitmapFactory.Options().apply {
-                                        this.inSampleSize = inSampleSize
-                                        inPreferredConfig = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                    android.graphics.Bitmap.Config.HARDWARE
-                                } else {
-                                    android.graphics.Bitmap.Config.ARGB_8888
+                    val mmr = android.media.MediaMetadataRetriever()
+                    try {
+                        if (track.path.isNotBlank() && !track.path.startsWith("content://")) {
+                            try {
+                                mmr.setDataSource(track.path)
+                            } catch (e: Exception) {
+                                mmr.setDataSource(context, track.contentUri)
+                            }
+                        } else {
+                            mmr.setDataSource(context, track.contentUri)
+                        }
+                        
+                        var rawBytes = mmr.embeddedPicture
+                        
+                        // Si falla o es nulo (común en OGG/OPUS), intentamos con JAudioTagger
+                        if (rawBytes == null) {
+                            try {
+                                val audioFile = org.jaudiotagger.audio.AudioFileIO.read(java.io.File(track.path))
+                                val tag = audioFile.tag
+                                val artwork = tag?.firstArtwork
+                                if (artwork != null) {
+                                    rawBytes = artwork.binaryData
                                 }
-                                    }
-                                    decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, finalOptions)
-                                }
-                                if (decoded != null) {
-                                    ArtworkCache.cache.put(track.path, decoded)
-                                    bitmap = decoded
-                                    return@withContext
-                                }
+                            } catch (e: Exception) {
+                                // Ignorar
                             }
                         }
+
+                        if (rawBytes != null) {
+                            val decoded: android.graphics.Bitmap?
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                                val source = android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(rawBytes))
+                                decoded = android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                                    var sampleSize = 1
+                                    if (info.size.height > 800 || info.size.width > 800) {
+                                        var halfHeight = info.size.height / 2
+                                        var halfWidth = info.size.width / 2
+                                        while (halfHeight / sampleSize >= 800 && halfWidth / sampleSize >= 800) {
+                                            sampleSize *= 2
+                                        }
+                                    }
+                                    decoder.setTargetSampleSize(sampleSize)
+                                }
+                            } else {
+                                val options = android.graphics.BitmapFactory.Options().apply {
+                                    inJustDecodeBounds = true
+                                }
+                                android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
+                                    
+                                var inSampleSize = 1
+                                if (options.outHeight > 800 || options.outWidth > 800) {
+                                    val halfHeight = options.outHeight / 2
+                                    val halfWidth = options.outWidth / 2
+                                    while (halfHeight / inSampleSize >= 800 && halfWidth / inSampleSize >= 800) {
+                                        inSampleSize *= 2
+                                    }
+                                }
+
+                                val finalOptions = android.graphics.BitmapFactory.Options().apply {
+                                    this.inSampleSize = inSampleSize
+                                    inPreferredConfig = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                        android.graphics.Bitmap.Config.HARDWARE
+                                    } else {
+                                        android.graphics.Bitmap.Config.ARGB_8888
+                                    }
+                                }
+                                decoded = android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, finalOptions)
+                            }
+                            if (decoded != null) {
+                                ArtworkCache.cache.put(track.path, decoded)
+                                bitmap = decoded
+                                return@withContext
+                            }
+                        }
+                    } finally {
+                        mmr.release()
                     }
                 } catch (e: Exception) {}
                 
-                // If it fails or has no embedded art, fallback to Coil
                 useFallback = true
             }
         }
     }
-
     if (bitmap != null) {
         Image(
             bitmap = bitmap!!.asImageBitmap(),
@@ -114,12 +142,17 @@ fun TrackImage(
             contentScale = contentScale,
             modifier = modifier
         )
-    } else if (useFallback && track.albumArtUri != null) {
-        AsyncImage(
-            model = track.albumArtUri,
-            contentDescription = track.title,
-            contentScale = contentScale,
-            modifier = modifier
-        )
+    } else if (useFallback) {
+        Box(
+            modifier = modifier.background(Color(0x1AFFFFFF)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxSize(0.4f)
+            )
+        }
     }
 }

@@ -76,17 +76,19 @@ fun LyricsScreen(
     val listState = rememberLazyListState()
 
     // Determine current active lyrics line based on audio position
-    val activeLineIndex = remember(parsedLyrics, currentPositionMs) {
-        if (parsedLyrics.isEmpty()) -1
+    val isSynced = remember(parsedLyrics) { parsedLyrics.any { it.timestampMs > 0L } }
+
+    val activeLineIndex = remember(parsedLyrics, currentPositionMs, isSynced) {
+        if (parsedLyrics.isEmpty() || !isSynced) -1
         else {
             val idx = parsedLyrics.indexOfLast { it.timestampMs <= currentPositionMs }
             if (idx != -1) idx else 0
         }
     }
 
-    // Auto-scroll to active lyrics line
-    LaunchedEffect(activeLineIndex) {
-        if (activeLineIndex in parsedLyrics.indices) {
+    // Auto-scroll to active lyrics line only if synced
+    LaunchedEffect(activeLineIndex, isSynced) {
+        if (isSynced && activeLineIndex in parsedLyrics.indices) {
             listState.animateScrollToItem((activeLineIndex - 2).coerceAtLeast(0))
         }
     }
@@ -195,7 +197,7 @@ fun LyricsScreen(
                     val isActive = index == activeLineIndex
 
                     val textColor by animateColorAsState(
-                        targetValue = if (isActive) MaterialTheme.colorScheme.primary else GlassTextSecondary,
+                        targetValue = if (isActive || !isSynced) MaterialTheme.colorScheme.primary else GlassTextSecondary,
                         animationSpec = tween(300),
                         label = "lyrics_color"
                     )

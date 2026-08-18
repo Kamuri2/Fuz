@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.ui.components.TrackImage
 import com.example.model.Track
 import com.example.ui.theme.AmberGlow
 import com.example.ui.theme.LiquidDarkBg
@@ -107,10 +108,9 @@ fun LiquidGlassBackground(
                             .blur(75.dp)
                     )
                 }
-                currentTrack.albumArtUri != null -> {
-                    AsyncImage(
-                        model = currentTrack.albumArtUri,
-                        contentDescription = null,
+                true -> {
+                    TrackImage(
+                        track = currentTrack,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()

@@ -28,8 +28,6 @@ object TrackRepository {
         scope.launch {
             try {
                 val db = AppDatabase.getDatabase(context)
-                // Forcing a DB clear to remove any corrupted lyrics cache from previous builds
-                db.trackDao().clear()
                 val cached = db.trackDao().getAllTracks().map { it.toTrack() }
                 if (cached.isNotEmpty()) {
                     _tracks.value = cached
@@ -41,9 +39,9 @@ object TrackRepository {
         }
     }
 
-    suspend fun saveScannedTracks(context: Context, newTracks: List<Track>) {
-        if (newTracks.isEmpty()) return
-        withContext(Dispatchers.IO) {
+    suspend fun saveScannedTracks(context: Context, newTracks: List<Track>): List<Track> {
+        if (newTracks.isEmpty()) return emptyList()
+        return withContext(Dispatchers.IO) {
             try {
                 val db = AppDatabase.getDatabase(context)
                 val existing = db.trackDao().getAllTracks().associateBy { it.id }
@@ -56,10 +54,13 @@ object TrackRepository {
                 }
                 
                 db.trackDao().insertOrUpdateTracks(entitiesToSave)
-                _tracks.value = entitiesToSave.map { it.toTrack() }
+                val mergedList = entitiesToSave.map { it.toTrack() }
+                _tracks.value = mergedList
                 Log.d(TAG, "Successfully cached ${entitiesToSave.size} tracks to Room DB")
+                mergedList
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving scanned tracks to Room: ${e.message}")
+                newTracks
             }
         }
     }

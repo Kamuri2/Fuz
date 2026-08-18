@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.ui.components.TrackImage
 import com.example.model.Track
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextSecondary
@@ -250,7 +251,7 @@ private fun QueueTrackRowItem(
             ) {
                 when {
                     artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    track.albumArtUri != null -> AsyncImage(model = track.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    true -> TrackImage(track = track, modifier = Modifier.fillMaxSize())
                     else -> Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 }
             }

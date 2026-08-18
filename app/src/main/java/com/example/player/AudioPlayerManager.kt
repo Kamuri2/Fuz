@@ -405,21 +405,6 @@ class AudioPlayerManager private constructor(private val context: Context) {
                     _playlist.value = currentPlaylist
                 }
                 var finalEnriched = enriched
-                if (finalEnriched.lyrics.isBlank()) {
-                    // Fallback to internet if local extraction yielded nothing
-                    val onlineLyrics = com.example.data.LrcLibHelper.fetchLyrics(track.title, track.artist, track.album, track.durationMs / 1000)
-                    if (onlineLyrics != null && onlineLyrics.isNotBlank()) {
-                        finalEnriched = finalEnriched.copy(lyrics = onlineLyrics)
-                        if (_currentIndex.value == index) {
-                            _currentTrack.value = finalEnriched
-                        }
-                        if (index in currentPlaylist.indices && currentPlaylist[index].id == track.id) {
-                            currentPlaylist[index] = finalEnriched
-                            _playlist.value = currentPlaylist
-                        }
-                    }
-                }
-                
                 if (finalEnriched.lyrics.isNotBlank()) {
                     com.example.data.TrackRepository.updateTrackLyrics(context, track.id, finalEnriched.lyrics)
                 }

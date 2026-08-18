@@ -74,12 +74,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import coil.compose.AsyncImage
+import com.example.ui.components.TrackImage
 
 import com.example.model.Track
 
 import com.example.ui.theme.GlassTextMuted
 
 import com.example.ui.theme.GlassTextSecondary
+import androidx.compose.material.icons.filled.Mic
 
 @Composable
 fun AlbumsScreen(
@@ -164,7 +166,7 @@ fun AlbumsScreen(
                                 ) {
                                     when {
                                         artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                        firstTrack?.albumArtUri != null -> AsyncImage(model = firstTrack.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                        firstTrack != null -> TrackImage(track = firstTrack, modifier = Modifier.fillMaxSize())
                                         else -> Icon(imageVector = Icons.Default.Album, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
                                     }
                                 }
@@ -266,8 +268,8 @@ fun AlbumDetailScreen(
             ) {
                 if (artworkBitmap != null) {
                     Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                } else if (firstTrack?.albumArtUri != null) {
-                    AsyncImage(model = firstTrack.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                } else if (firstTrack != null) {
+                    TrackImage(track = firstTrack, modifier = Modifier.fillMaxSize())
                 }
                 
                 Box(modifier = Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f)))))
@@ -339,7 +341,26 @@ fun AlbumDetailScreen(
                 )
                 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = track.title, color = MaterialTheme.colorScheme.onBackground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = track.title, 
+                            color = MaterialTheme.colorScheme.onBackground, 
+                            fontSize = 16.sp, 
+                            fontWeight = FontWeight.SemiBold, 
+                            maxLines = 1, 
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (track.lyrics.isNotBlank()) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Lyrics available",
+                                tint = GlassTextMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
                     Text(text = track.artist, color = GlassTextSecondary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 

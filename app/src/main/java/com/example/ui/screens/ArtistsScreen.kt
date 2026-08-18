@@ -90,6 +90,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import coil.compose.AsyncImage
+import com.example.ui.components.TrackImage
 
 import com.example.model.Track
 
@@ -100,6 +101,7 @@ import com.example.ui.theme.GlassTextSecondary
 import com.example.data.ArtistInfoFetcher
 
 import com.example.data.ArtistInfo
+import androidx.compose.material.icons.filled.Mic
 
 @Composable
 fun ArtistsScreen(
@@ -188,7 +190,7 @@ fun ArtistsScreen(
                                     .background(Color(0x1AFFFFFF)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                val trackFallback = tracks.firstOrNull { it.artist == artistName }?.albumArtUri
+                                val trackFallback = tracks.firstOrNull { it.artist == artistName }
                                 if (imageUrl != null) {
                                     AsyncImage(
                                         model = imageUrl,
@@ -197,9 +199,8 @@ fun ArtistsScreen(
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 } else if (trackFallback != null) {
-                                    AsyncImage(
-                                        model = trackFallback,
-                                        contentDescription = artistName,
+                                    TrackImage(
+                                        track = trackFallback,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize()
                                     )
@@ -319,7 +320,6 @@ fun ArtistDetailScreen(
             ) {
                 val firstTrack = tracks.firstOrNull()
                 val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
-                val fallbackImage = firstTrack?.albumArtUri
                 
                 if (artistInfo?.imageUrl != null) {
                     AsyncImage(
@@ -330,15 +330,13 @@ fun ArtistDetailScreen(
                     )
                 } else if (artworkBitmap != null) {
                     Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                } else if (fallbackImage != null) {
-                    AsyncImage(
-                        model = fallbackImage,
-                        contentDescription = null,
+                } else if (firstTrack != null) {
+                    TrackImage(
+                        track = firstTrack,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -494,13 +492,32 @@ fun ArtistDetailScreen(
                 Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(Color.DarkGray)) {
                     if (artworkBitmap != null) {
                         Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    } else if (track.albumArtUri != null) {
-                        AsyncImage(model = track.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    } else {
+                        TrackImage(track = track, modifier = Modifier.fillMaxSize())
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = track.title, color = MaterialTheme.colorScheme.onBackground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = track.title, 
+                            color = MaterialTheme.colorScheme.onBackground, 
+                            fontSize = 16.sp, 
+                            fontWeight = FontWeight.SemiBold, 
+                            maxLines = 1, 
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (track.lyrics.isNotBlank()) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Lyrics available",
+                                tint = GlassTextMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
                     Text(text = track.album, color = GlassTextSecondary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text(

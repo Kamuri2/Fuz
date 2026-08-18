@@ -35,6 +35,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.ui.components.TrackImage
 import com.example.model.Track
 import com.example.ui.theme.AmberGlow
 
@@ -125,10 +126,9 @@ fun LiquidVinylArtwork(
                             modifier = Modifier.fillMaxSize()
                         )
                     }
-                    track?.albumArtUri != null -> {
-                        AsyncImage(
-                            model = track.albumArtUri,
-                            contentDescription = track.album,
+                    track != null -> {
+                        TrackImage(
+                            track = track,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )

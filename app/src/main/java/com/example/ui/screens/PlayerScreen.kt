@@ -157,7 +157,7 @@ fun PlayerScreen(
     }
 
     val parsedLyrics = remember(currentTrack?.lyrics) {
-        LrcParser.parse(currentTrack?.lyrics ?: "")
+        com.example.model.LyricsParser.parseLrc(currentTrack?.lyrics ?: "")
     }
 
     // artworkBitmap removed in favor of TrackImage
@@ -920,7 +920,7 @@ fun PlayerScreen(
 
 @Composable
 fun LiveSyncedLyricSnippet(
-    parsedLyrics: List<LrcLine>,
+    parsedLyrics: List<com.example.model.LyricsLine>,
     rawLyrics: String,
     currentPositionMs: Long,
     onClick: () -> Unit,
@@ -929,7 +929,11 @@ fun LiveSyncedLyricSnippet(
     if (parsedLyrics.isEmpty()) return
 
     val activeIndex = remember(currentPositionMs, parsedLyrics) {
-        LrcParser.getCurrentLineIndex(parsedLyrics, currentPositionMs)
+        if (parsedLyrics.isEmpty()) -1
+        else {
+            val idx = parsedLyrics.indexOfLast { it.timestampMs <= currentPositionMs }
+            if (idx != -1) idx else 0
+        }
     }
 
     val currentLineText = remember(activeIndex, parsedLyrics) {
@@ -974,7 +978,7 @@ fun LiveSyncedLyricSnippet(
 
 @Composable
 fun LyricsContent(
-    parsedLyrics: List<LrcLine>,
+    parsedLyrics: List<com.example.model.LyricsLine>,
     rawLyrics: String,
     currentPositionMs: Long,
     language: String,
@@ -1027,7 +1031,7 @@ fun LyricsContent(
         }
     } else {
         val activeIndex = remember(currentPositionMs, parsedLyrics) {
-            LrcParser.getCurrentLineIndex(parsedLyrics, currentPositionMs)
+            (if (parsedLyrics.isEmpty()) -1 else { val idx = parsedLyrics.indexOfLast { it.timestampMs <= currentPositionMs }; if (idx != -1) idx else 0 })
         }
         val listState = rememberLazyListState()
 
@@ -1069,7 +1073,7 @@ fun LyricsContent(
                         .padding(horizontal = 24.dp)
                         .graphicsLayer { scaleX = animatedScale; scaleY = animatedScale }
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { onSeek(line.timeMs) }
+                        .clickable { onSeek(line.timestampMs) }
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }

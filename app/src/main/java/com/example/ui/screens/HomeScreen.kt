@@ -50,10 +50,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.ui.components.TrackImage
 import com.example.model.Track
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextPrimary
 import com.example.ui.theme.GlassTextSecondary
+import androidx.compose.material.icons.filled.Mic
 
 @Composable
 fun HomeScreen(
@@ -292,7 +294,7 @@ private fun HomeTrackCardItem(
             contentAlignment = Alignment.Center
         ) {
             when {
-                track.albumArtUri != null -> AsyncImage(model = track.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                true -> TrackImage(track = track, modifier = Modifier.fillMaxSize())
                 else -> Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
             }
         }
@@ -301,14 +303,26 @@ private fun HomeTrackCardItem(
 
         // Title and Artist (Matching Screenshot #1)
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = track.title,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isCurrent) Color(0xFF00F0FF) else Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = track.title,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isCurrent) Color(0xFF00F0FF) else Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (track.lyrics.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "Lyrics available",
+                        tint = GlassTextMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = track.artist,

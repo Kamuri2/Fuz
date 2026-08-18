@@ -110,7 +110,7 @@ object AudioScanner {
                         album = album,
                         durationMs = duration,
                         contentUri = contentUri,
-                        albumArtUri = artUri,
+                        albumArtUri = null, // Disable MediaStore folder fallback
                         trackNumber = trackNum,
                         year = year,
                         fileSizeFormatted = sizeMb,

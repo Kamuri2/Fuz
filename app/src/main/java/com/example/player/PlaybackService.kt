@@ -75,51 +75,27 @@ class PlaybackService : Service() {
 
         var albumArtBitmap: android.graphics.Bitmap? = null
         try {
+            val mmr = android.media.MediaMetadataRetriever()
             if (track.path.isNotBlank() && !track.path.startsWith("content://")) {
-                val file = java.io.File(track.path)
-                if (file.exists()) {
-                    val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
-                    val rawBytes = audioFile.tag?.firstArtwork?.binaryData
-                    if (rawBytes != null) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                            val source = android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(rawBytes))
-                            albumArtBitmap = android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-                                var sampleSize = 1
-                                if (info.size.height > 300 || info.size.width > 300) {
-                                    var halfHeight = info.size.height / 2
-                                    var halfWidth = info.size.width / 2
-                                    while (halfHeight / sampleSize >= 300 && halfWidth / sampleSize >= 300) {
-                                        sampleSize *= 2
-                                    }
-                                }
-                                decoder.setTargetSampleSize(sampleSize)
-                                // decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
-                            }
-                        } else {
-                            val options = android.graphics.BitmapFactory.Options().apply {
-                                inJustDecodeBounds = true
-                            }
-                            android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
-                            
-                            var inSampleSize = 1
-                            if (options.outHeight > 300 || options.outWidth > 300) {
-                                val halfHeight = options.outHeight / 2
-                                val halfWidth = options.outWidth / 2
-                                while (halfHeight / inSampleSize >= 300 && halfWidth / inSampleSize >= 300) {
-                                    inSampleSize *= 2
-                                }
-                            }
-                            val finalOptions = android.graphics.BitmapFactory.Options().apply {
-                                this.inSampleSize = inSampleSize
-                                inPreferredConfig = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                    android.graphics.Bitmap.Config.HARDWARE
-                                } else {
-                                    android.graphics.Bitmap.Config.ARGB_8888
-                                }
-                            }
-                            albumArtBitmap = android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, finalOptions)
-                        }
+                try {
+                    mmr.setDataSource(track.path)
+                } catch (e:Exception) {
+                    mmr.setDataSource(this, track.contentUri)
+                }
+            } else {
+                mmr.setDataSource(this, track.contentUri)
+            }
+            val rawBytes = mmr.embeddedPicture
+            mmr.release()
+            if (rawBytes != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val source = android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(rawBytes))
+                    albumArtBitmap = android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                        decoder.setTargetSampleSize(2)
                     }
+                } else {
+                    val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
+                    albumArtBitmap = android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
                 }
             }
         } catch (e: Exception) {}
