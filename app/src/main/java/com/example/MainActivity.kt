@@ -131,6 +131,7 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         val coroutineScope = rememberCoroutineScope()
         var currentScreen by remember { mutableStateOf(NavigationScreen.HOME) }
         var isPlayerExpanded by remember { mutableStateOf(false) }
+    var isForceRescan by remember { mutableStateOf(false) }
         val cachedTracks by com.example.data.TrackRepository.tracks.collectAsState()
         var loadedTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
         var showQueueSheet by remember { mutableStateOf(false) }
@@ -219,7 +220,14 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
             coroutineScope.launch(Dispatchers.IO) {
                 val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
                 if (deviceTracks.isNotEmpty()) {
-                    com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks)
+                    val saved = com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks, isForceRescan)
+                    isForceRescan = false
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        loadedTracks = saved
+                        if (playerManager.playlist.value.isEmpty()) {
+                            playerManager.setQueue(saved, 0, false)
+                        }
+                    }
                 }
             }
         }
@@ -248,11 +256,12 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
             kotlinx.coroutines.withContext(Dispatchers.IO) {
                 val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
                 if (deviceTracks.isNotEmpty()) {
-                    com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks)
+                    val saved = com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks, isForceRescan)
+                    isForceRescan = false
                     kotlinx.coroutines.withContext(Dispatchers.Main) {
-                        loadedTracks = deviceTracks
+                        loadedTracks = saved
                         if (playerManager.playlist.value.isEmpty()) {
-                            playerManager.setQueue(deviceTracks, 0, false)
+                            playerManager.setQueue(saved, 0, false)
                         }
                     }
                 }
@@ -372,7 +381,7 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         onUpdateSettings = { playerManager.updateSettings(it) },
                         onBack = { currentScreen = NavigationScreen.HOME },
                         onPickFolderUri = { folderPickerLauncher.launch(null) },
-                        onRescanAudio = { permissionLauncher.launch(requiredPermissions) }
+                        onRescanAudio = { isForceRescan = true; permissionLauncher.launch(requiredPermissions) }
                     )
                     else -> {}
                 }

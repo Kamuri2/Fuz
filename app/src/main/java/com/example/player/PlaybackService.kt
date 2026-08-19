@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadata
 import android.media.session.MediaSession
@@ -73,72 +74,52 @@ class PlaybackService : Service() {
             .putString(MediaMetadata.METADATA_KEY_ALBUM, track.album)
             .putLong(MediaMetadata.METADATA_KEY_DURATION, track.durationMs)
 
-        var albumArtBitmap: android.graphics.Bitmap? = null
+                var albumArtBitmap: android.graphics.Bitmap? = null
         try {
-            val mmr = android.media.MediaMetadataRetriever()
-            if (track.path.isNotBlank() && !track.path.startsWith("content://")) {
+            var rawBytes: ByteArray? = null
+            if (track.path.isNotBlank()) {
                 try {
-                    mmr.setDataSource(track.path)
-                } catch (e:Exception) {
-                    mmr.setDataSource(this, track.contentUri)
-                }
-            } else {
-                mmr.setDataSource(this, track.contentUri)
-            }
-            val rawBytes = mmr.embeddedPicture
-            mmr.release()
-            if (rawBytes != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    val source = android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(rawBytes))
-                    albumArtBitmap = android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-                        decoder.setTargetSampleSize(2)
+                    val file = java.io.File(track.path)
+                    if (file.exists() && file.canRead()) {
+                        val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+                        rawBytes = audioFile.tag?.firstArtwork?.binaryData
                     }
-                } else {
-                    val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
-                    albumArtBitmap = android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
+                } catch (e: Exception) {}
+            }
+            
+            if (rawBytes != null && rawBytes.isNotEmpty()) {
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = 2
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
                 }
+                albumArtBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
             }
         } catch (e: Exception) {}
-        
         if (albumArtBitmap == null && track.albumArtUri != null) {
             try {
                 // For MediaStore URIs, we should also try to limit size if possible, but keeping it simple for now
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    val source = android.graphics.ImageDecoder.createSource(contentResolver, track.albumArtUri)
-                    albumArtBitmap = android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-                        var sampleSize = 1
-                        if (info.size.height > 300 || info.size.width > 300) {
-                            var halfHeight = info.size.height / 2
-                            var halfWidth = info.size.width / 2
-                            while (halfHeight / sampleSize >= 300 && halfWidth / sampleSize >= 300) {
-                                sampleSize *= 2
-                            }
-                        }
-                        decoder.setTargetSampleSize(sampleSize)
-                        // decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+                val pfd = contentResolver.openFileDescriptor(track.albumArtUri, "r")
+                if (pfd != null) {
+                    val fd = pfd.fileDescriptor
+                    val boundsOptions = BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
                     }
-                } else {
-                    val pfd = contentResolver.openFileDescriptor(track.albumArtUri, "r")
-                    if (pfd != null) {
-                        val fd = pfd.fileDescriptor
-                        val options = android.graphics.BitmapFactory.Options().apply {
-                            inJustDecodeBounds = true
+                    BitmapFactory.decodeFileDescriptor(fd, null, boundsOptions)
+                    var sampleSize = 1
+                    val targetDim = 300
+                    if (boundsOptions.outHeight > targetDim || boundsOptions.outWidth > targetDim) {
+                        val halfHeight = boundsOptions.outHeight / 2
+                        val halfWidth = boundsOptions.outWidth / 2
+                        while (halfHeight / sampleSize >= targetDim && halfWidth / sampleSize >= targetDim) {
+                            sampleSize *= 2
                         }
-                        android.graphics.BitmapFactory.decodeFileDescriptor(fd, null, options)
-                        var inSampleSize = 1
-                        if (options.outHeight > 300 || options.outWidth > 300) {
-                            val halfHeight = options.outHeight / 2
-                            val halfWidth = options.outWidth / 2
-                            while (halfHeight / inSampleSize >= 300 && halfWidth / inSampleSize >= 300) {
-                                inSampleSize *= 2
-                            }
-                        }
-                        val finalOptions = android.graphics.BitmapFactory.Options().apply {
-                            this.inSampleSize = inSampleSize
-                        }
-                        albumArtBitmap = android.graphics.BitmapFactory.decodeFileDescriptor(fd, null, finalOptions)
-                        pfd.close()
                     }
+                    val decodeOptions = BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    albumArtBitmap = BitmapFactory.decodeFileDescriptor(fd, null, decodeOptions)
+                    pfd.close()
                 }
             } catch (e: Exception) {}
         }

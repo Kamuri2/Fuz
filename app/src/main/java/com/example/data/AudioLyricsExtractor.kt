@@ -4,13 +4,11 @@ import android.content.Context
 import android.net.Uri
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
-import org.jaudiotagger.tag.id3.ID3v24Frames
 import org.jaudiotagger.tag.id3.framebody.FrameBodyUSLT
 import org.jaudiotagger.tag.id3.framebody.FrameBodySYLT
-import org.jaudiotagger.tag.mp4.Mp4Tag
-import org.jaudiotagger.tag.mp4.field.Mp4TagTextField
 import java.io.File
 import java.io.FileOutputStream
+import java.io.ByteArrayOutputStream
 
 object AudioLyricsExtractor {
 
@@ -21,19 +19,17 @@ object AudioLyricsExtractor {
     )
 
     fun extractLyrics(context: Context, audioUri: Uri, audioFilePath: String?): LyricsResult {
-        // 1. Intentar buscar archivo externo .lrc / .txt primero
         val externalLyrics = checkAdjacentLyricsFile(audioFilePath)
         if (externalLyrics != null) {
-            return LyricsResult(lyrics = externalLyrics, isSynced = true, source = "EXTERNAL_FILE")
+            val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(externalLyrics)
+            return LyricsResult(lyrics = externalLyrics, isSynced = isSynced, source = "EXTERNAL_FILE")
         }
 
-        // 2. Extraer metadatos incrustados con JAudioTagger
         var tempFile: File? = null
         try {
             val fileToRead = if (audioFilePath != null && File(audioFilePath).exists()) {
                 File(audioFilePath)
             } else {
-                // Si viene de ContentUri, crear archivo temporal para permitir RandomAccess
                 tempFile = createTempAudioHeader(context, audioUri)
                 tempFile
             }
@@ -43,23 +39,7 @@ object AudioLyricsExtractor {
                 val tag = audioFile.tag
 
                 if (tag != null) {
-                    // Letras no sincronizadas estándar
-                    val unsynced = tag.getFirst(FieldKey.LYRICS)
-                    if (!unsynced.isNullOrBlank()) {
-                        return LyricsResult(lyrics = unsynced, isSynced = false, source = "EMBEDDED_UNSYNCED")
-                    }
-
-                    // Búsqueda específica en ID3 (USLT / SYLT / TXXX / COMM)
                     if (tag is org.jaudiotagger.tag.id3.AbstractID3v2Tag) {
-                        val usltFrame = tag.getFrame("USLT") as? org.jaudiotagger.tag.id3.AbstractID3v2Frame
-                        if (usltFrame != null && usltFrame.body is FrameBodyUSLT) {
-                            val lyricText = (usltFrame.body as FrameBodyUSLT).lyric
-                            if (!lyricText.isNullOrBlank()) {
-                                return LyricsResult(lyrics = lyricText, isSynced = false, source = "ID3_USLT")
-                            }
-                        }
-                        
-                        // Buscar en SYLT (Synchronised Lyrics)
                         val syltFrame = tag.getFrame("SYLT") as? org.jaudiotagger.tag.id3.AbstractID3v2Frame
                         if (syltFrame != null && syltFrame.body is org.jaudiotagger.tag.id3.framebody.FrameBodySYLT) {
                             val syltBody = syltFrame.body as org.jaudiotagger.tag.id3.framebody.FrameBodySYLT
@@ -75,8 +55,34 @@ object AudioLyricsExtractor {
                                 e.printStackTrace()
                             }
                         }
+                    }
 
-                        // Buscar en TXXX:LYRICS o TXXX:UNSYNCEDLYRICS
+                    val fields = tag.fields
+                    while (fields.hasNext()) {
+                        val field = fields.next()
+                        val lowerId = field.id.lowercase()
+                        if (lowerId.contains("lyric") || lowerId.contains("sylt") || lowerId.contains("uslt")) {
+                            if (!field.isBinary) {
+                                val content = field.toString()
+                                if (!content.isNullOrBlank() && content.length > 20) {
+                                    val cleanContent = tag.getFirst(field.id).takeIf { it.isNotBlank() } ?: content
+                                    val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(cleanContent)
+                                    return LyricsResult(lyrics = cleanContent, isSynced = isSynced, source = "TAG_${field.id.uppercase()}")
+                                }
+                            }
+                        }
+                    }
+
+                    if (tag is org.jaudiotagger.tag.id3.AbstractID3v2Tag) {
+                        val usltFrame = tag.getFrame("USLT") as? org.jaudiotagger.tag.id3.AbstractID3v2Frame
+                        if (usltFrame != null && usltFrame.body is FrameBodyUSLT) {
+                            val lyricText = (usltFrame.body as FrameBodyUSLT).lyric
+                            if (!lyricText.isNullOrBlank()) {
+                                val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(lyricText)
+                                return LyricsResult(lyrics = lyricText, isSynced = isSynced, source = "ID3_USLT")
+                            }
+                        }
+
                         val txxxFrames = tag.getFrame("TXXX")
                         if (txxxFrames != null) {
                             val framesList = if (txxxFrames is List<*>) txxxFrames else listOf(txxxFrames)
@@ -87,25 +93,8 @@ object AudioLyricsExtractor {
                                     if (body.description.equals("LYRICS", ignoreCase = true) || body.description.equals("UNSYNCEDLYRICS", ignoreCase = true)) {
                                         val lyricText = body.text
                                         if (!lyricText.isNullOrBlank()) {
-                                            return LyricsResult(lyrics = lyricText, isSynced = false, source = "ID3_TXXX")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Buscar en COMM (Comments) si empiezan con Lyrics
-                        val commFrames = tag.getFrame("COMM")
-                        if (commFrames != null) {
-                            val framesList = if (commFrames is List<*>) commFrames else listOf(commFrames)
-                            for (frame in framesList) {
-                                val commFrame = frame as? org.jaudiotagger.tag.id3.AbstractID3v2Frame
-                                if (commFrame?.body is org.jaudiotagger.tag.id3.framebody.FrameBodyCOMM) {
-                                    val body = commFrame.body as org.jaudiotagger.tag.id3.framebody.FrameBodyCOMM
-                                    if (body.description.equals("LYRICS", ignoreCase = true) || body.text.startsWith("[") || body.text.contains("\n")) {
-                                        val lyricText = body.text
-                                        if (!lyricText.isNullOrBlank() && lyricText.length > 50) { // arbitrary length check for lyrics vs short comment
-                                            return LyricsResult(lyrics = lyricText, isSynced = false, source = "ID3_COMM")
+                                            val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(lyricText)
+                                            return LyricsResult(lyrics = lyricText, isSynced = isSynced, source = "ID3_TXXX")
                                         }
                                     }
                                 }
@@ -113,15 +102,10 @@ object AudioLyricsExtractor {
                         }
                     }
                     
-                    if (tag is org.jaudiotagger.tag.vorbiscomment.VorbisCommentTag) {
-                        val synced = tag.getFirst("SYNCEDLYRICS")
-                        if (!synced.isNullOrBlank()) {
-                            return LyricsResult(lyrics = synced, isSynced = true, source = "VORBIS_SYNCED")
-                        }
-                        val unsyncedVorbis = tag.getFirst("UNSYNCEDLYRICS")
-                        if (!unsyncedVorbis.isNullOrBlank()) {
-                            return LyricsResult(lyrics = unsyncedVorbis, isSynced = false, source = "VORBIS_UNSYNCED")
-                        }
+                    val rawLyrics = tag.getFirst(FieldKey.LYRICS)
+                    if (!rawLyrics.isNullOrBlank()) {
+                        val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(rawLyrics)
+                        return LyricsResult(lyrics = rawLyrics, isSynced = isSynced, source = if (isSynced) "EMBEDDED_LRC" else "EMBEDDED_UNSYNCED")
                     }
                 }
             }
@@ -130,17 +114,22 @@ object AudioLyricsExtractor {
         } finally {
             tempFile?.delete()
         }
+        
+        if (audioFilePath != null) {
+            val deepScanResult = getOpusLyricsDeepScan(audioFilePath)
+            if (deepScanResult != null) {
+                return deepScanResult
+            }
+        }
 
         return LyricsResult(lyrics = null, isSynced = false, source = "NONE")
     }
-
 
     private fun parseSyltToLrc(lyricsBytes: ByteArray): String {
         try {
             val builder = java.lang.StringBuilder()
             var offset = 0
             while (offset < lyricsBytes.size) {
-                // Find end of text string (null terminated)
                 var textEnd = offset
                 while (textEnd < lyricsBytes.size && lyricsBytes[textEnd].toInt() != 0) {
                     textEnd++
@@ -149,7 +138,6 @@ object AudioLyricsExtractor {
                 
                 val text = String(lyricsBytes, offset, textEnd - offset, Charsets.UTF_8).trim()
                 
-                // Timestamp is 4 bytes integer after the null terminator
                 offset = textEnd + 1
                 if (offset + 3 < lyricsBytes.size) {
                     val t1 = lyricsBytes[offset].toInt() and 0xFF
@@ -181,10 +169,8 @@ object AudioLyricsExtractor {
         if (audioPath == null) return null
         val audioFile = File(audioPath)
         if (!audioFile.exists()) return null
-
         val baseName = audioFile.nameWithoutExtension
         val parentDir = audioFile.parentFile ?: return null
-
         val extensions = listOf("lrc", "txt", "srt")
         for (ext in extensions) {
             val candidate = File(parentDir, "$baseName.$ext")
@@ -207,5 +193,106 @@ object AudioLyricsExtractor {
         } catch (e: Exception) {
             null
         }
+    }
+    
+    private fun getOpusLyricsDeepScan(filePath: String): LyricsResult? {
+        try {
+            val file = File(filePath)
+            if (!file.exists()) return null
+            
+            val inputStream = file.inputStream()
+            val buffer = ByteArray(5 * 1024 * 1024) 
+            val bytesRead = inputStream.read(buffer)
+            inputStream.close()
+            
+            if (bytesRead < 27) return null
+            
+            val packetData = ByteArrayOutputStream()
+            var offset = 0
+            var capturingTags = false
+            
+            while (offset < bytesRead - 27) {
+                if (buffer[offset] == 'O'.code.toByte() && buffer[offset+1] == 'g'.code.toByte() && 
+                    buffer[offset+2] == 'g'.code.toByte() && buffer[offset+3] == 'S'.code.toByte()) {
+                    
+                    val segments = buffer[offset + 26].toInt() and 0xFF
+                    val segmentTableOffset = offset + 27
+                    var pageDataOffset = segmentTableOffset + segments
+                    
+                    if (pageDataOffset > bytesRead) break
+                    
+                    for (i in 0 until segments) {
+                        if (segmentTableOffset + i >= bytesRead) break
+                        val segmentLength = buffer[segmentTableOffset + i].toInt() and 0xFF
+                        if (pageDataOffset + segmentLength > bytesRead) break
+                        
+                        if (segmentLength >= 8 && 
+                            buffer[pageDataOffset] == 'O'.code.toByte() && 
+                            buffer[pageDataOffset+1] == 'p'.code.toByte() &&
+                            buffer[pageDataOffset+2] == 'u'.code.toByte() &&
+                            buffer[pageDataOffset+3] == 's'.code.toByte() &&
+                            buffer[pageDataOffset+4] == 'T'.code.toByte() &&
+                            buffer[pageDataOffset+5] == 'a'.code.toByte() &&
+                            buffer[pageDataOffset+6] == 'g'.code.toByte() &&
+                            buffer[pageDataOffset+7] == 's'.code.toByte()) {
+                            capturingTags = true
+                        }
+                        
+                        if (capturingTags) {
+                            packetData.write(buffer, pageDataOffset, segmentLength)
+                            if (segmentLength < 255) {
+                                offset = bytesRead 
+                                break
+                            }
+                        }
+                        pageDataOffset += segmentLength
+                    }
+                    if (offset == bytesRead) break
+                    offset = pageDataOffset
+                } else {
+                    offset++
+                }
+            }
+            
+            if (packetData.size() > 8) {
+                val packetBytes = packetData.toByteArray()
+                var pOffset = 8 // Skip "OpusTags"
+                
+                fun readInt32LE(bytes: ByteArray, idx: Int): Int {
+                    if (idx + 3 >= bytes.size) return 0
+                    return (bytes[idx].toInt() and 0xFF) or 
+                           ((bytes[idx+1].toInt() and 0xFF) shl 8) or 
+                           ((bytes[idx+2].toInt() and 0xFF) shl 16) or 
+                           ((bytes[idx+3].toInt() and 0xFF) shl 24)
+                }
+                
+                val vendorLen = readInt32LE(packetBytes, pOffset)
+                pOffset += 4 + vendorLen
+                if (pOffset < packetBytes.size) {
+                    val commentListLen = readInt32LE(packetBytes, pOffset)
+                    pOffset += 4
+                    
+                    for (i in 0 until commentListLen) {
+                        if (pOffset + 4 > packetBytes.size) break
+                        val commentLen = readInt32LE(packetBytes, pOffset)
+                        pOffset += 4
+                        
+                        if (pOffset + commentLen > packetBytes.size) break
+                        val commentStr = String(packetBytes, pOffset, commentLen, Charsets.UTF_8)
+                        pOffset += commentLen
+                        
+                        val lower = commentStr.lowercase()
+                        if (lower.startsWith("lyrics=") || lower.startsWith("sylt=") || lower.startsWith("uslt=") || lower.startsWith("text=")) {
+                            val content = commentStr.substring(commentStr.indexOf('=') + 1).trim()
+                            val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(content)
+                            return LyricsResult(lyrics = content, isSynced = isSynced, source = "OPUS_TAGS_PARSER")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return null
     }
 }

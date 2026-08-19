@@ -1,7 +1,8 @@
 package com.example.player
 
-import android.content.Context
 import android.media.AudioAttributes
+
+import android.content.Context
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
@@ -392,24 +393,25 @@ class AudioPlayerManager private constructor(private val context: Context) {
 
         val currentSession = ++activeSessionId
 
-        // Asynchronously enrich metadata on IO thread without blocking UI or playback start
-        scope.launch(Dispatchers.IO) {
-            try {
-                val enriched = com.example.data.MetadataReader.extractFullMetadata(context, track)
-                if (_currentIndex.value == index) {
-                    _currentTrack.value = enriched
+        // If track is missing lyrics or technical metadata, extract in background as fallback
+        if (track.lyrics.isBlank() || track.bitrate.isBlank()) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val enriched = com.example.data.MetadataReader.extractFullMetadata(context, track)
+                    if (_currentIndex.value == index) {
+                        _currentTrack.value = enriched
+                    }
+                    val currentPlaylist = _playlist.value.toMutableList()
+                    if (index in currentPlaylist.indices && currentPlaylist[index].id == track.id) {
+                        currentPlaylist[index] = enriched
+                        _playlist.value = currentPlaylist
+                    }
+                    if (enriched.lyrics.isNotBlank()) {
+                        com.example.data.TrackRepository.updateTrackLyrics(context, track.id, enriched.lyrics)
+                    }
+                } catch (e: Exception) {
+                    Log.d(TAG, "Metadata extraction fallback skipped: ${e.message}")
                 }
-                val currentPlaylist = _playlist.value.toMutableList()
-                if (index in currentPlaylist.indices && currentPlaylist[index].id == track.id) {
-                    currentPlaylist[index] = enriched
-                    _playlist.value = currentPlaylist
-                }
-                var finalEnriched = enriched
-                if (finalEnriched.lyrics.isNotBlank()) {
-                    com.example.data.TrackRepository.updateTrackLyrics(context, track.id, finalEnriched.lyrics)
-                }
-            } catch (e: Exception) {
-                Log.d(TAG, "Metadata extraction skipped: ${e.message}")
             }
         }
 

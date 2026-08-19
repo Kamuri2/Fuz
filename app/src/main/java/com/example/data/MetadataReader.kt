@@ -1,7 +1,6 @@
 package com.example.data
 
 import android.content.Context
-import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -21,105 +20,105 @@ object MetadataReader {
      * Reads complete metadata from an audio Uri using MediaMetadataRetriever
      * and deep JAudioTagger extraction for embedded LRC lyrics and tags across all formats (MP3, FLAC, WAV, M4A, OGG, OPUS).
      */
-    fun extractFullMetadata(context: Context, track: Track): Track {
-        val retriever = MediaMetadataRetriever()
-        var tempCacheFile: File? = null
-        return try {
-            try {
-                retriever.setDataSource(context, track.contentUri)
-            } catch (e: Exception) {
-                Log.d(TAG, "MediaMetadataRetriever setDataSource error: ${e.message}")
-            }
+            fun extractFullMetadata(context: Context, track: Track): Track {
+        var title = track.title
+        var artist = track.artist
+        var album = track.album
+        var year = track.year
+        var trackNumber = track.trackNumber
+        var genre = track.genre
+        var bitrate = track.bitrate
+        var sampleRate = track.sampleRate
+        var durationMs = track.durationMs
 
-            var title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-                ?.takeIf { it.isNotBlank() } ?: track.title
-            var artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-                ?.takeIf { it.isNotBlank() } ?: track.artist
-            var album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-                ?.takeIf { it.isNotBlank() } ?: track.album
-            val yearStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
-            val year = yearStr?.toIntOrNull() ?: track.year
-            
-            val trackNumStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
-            var trackNumber = parseTrackNumber(trackNumStr) ?: track.trackNumber
-            
-            val genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
-                ?.takeIf { it.isNotBlank() } ?: track.genre
-            val bitrateRaw = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
-            val bitrate = bitrateRaw?.toLongOrNull()?.let { "${it / 1000} kbps" } ?: track.bitrate
-            val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-            val durationMs = durationStr?.toLongOrNull() ?: track.durationMs
-            
-            var sampleRate = track.sampleRate
-            var extractor: MediaExtractor? = null
+        if (track.path.isNotBlank()) {
             try {
-                extractor = MediaExtractor()
-                extractor.setDataSource(context, track.contentUri, null)
-                if (extractor.trackCount > 0) {
-                    val format = extractor.getTrackFormat(0)
-                    if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
-                        val sr = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                        sampleRate = "${sr / 1000.0} kHz".replace(".0 kHz", " kHz")
+                val file = File(track.path)
+                if (file.exists() && file.canRead()) {
+                    val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+                    val tag = audioFile.tag
+                    val header = audioFile.audioHeader
+
+                    if (tag != null) {
+                        tag.getFirst(org.jaudiotagger.tag.FieldKey.TITLE)?.takeIf { it.isNotBlank() }?.let { title = it }
+                        tag.getFirst(org.jaudiotagger.tag.FieldKey.ARTIST)?.takeIf { it.isNotBlank() }?.let { artist = it }
+                        tag.getFirst(org.jaudiotagger.tag.FieldKey.ALBUM)?.takeIf { it.isNotBlank() }?.let { album = it }
+                        tag.getFirst(org.jaudiotagger.tag.FieldKey.YEAR)?.takeIf { it.isNotBlank() }?.toIntOrNull()?.let { year = it }
+                        
+                        val trackStr = tag.getFirst(org.jaudiotagger.tag.FieldKey.TRACK)
+                        parseTrackNumber(trackStr)?.let { trackNumber = it }
+                        
+                        tag.getFirst(org.jaudiotagger.tag.FieldKey.GENRE)?.takeIf { it.isNotBlank() }?.let { genre = it }
+                    }
+
+                    if (header != null) {
+                        val br = header.bitRateAsNumber
+                        if (br > 0) {
+                            bitrate = "${br} kbps"
+                        }
+                        val sr = header.sampleRateAsNumber
+                        if (sr > 0) {
+                            sampleRate = "${sr / 1000.0} kHz".replace(".0 kHz", " kHz")
+                        }
+                        val dur = header.trackLength
+                        if (dur > 0) {
+                            durationMs = (dur * 1000).toLong()
+                        }
                     }
                 }
             } catch (e: Exception) {
-                Log.d(TAG, "Extractor error: ${e.message}")
-            } finally {
-                try {
-                    extractor?.release()
-                } catch (e: Exception) {}
-            }
-
-            var artworkBytes: ByteArray? = null // Removed from Track to save RAM
-            
-            val lyricsResult = AudioLyricsExtractor.extractLyrics(context, track.contentUri, track.path.takeIf { it.isNotBlank() && !it.startsWith("content://") })
-            var extractedLyrics = lyricsResult.lyrics ?: ""
-            if (extractedLyrics.isNotBlank()) {
-                extractedLyrics = cleanExtractedLyrics(extractedLyrics)
+                Log.d("MetadataReader", "JAudioTagger failed for metadata: ${e.message}")
             }
             
-            if (artworkBytes == null) {
-                artworkBytes = retriever.embeddedPicture
-            }
-            
-            // Intento nativo de Android como respaldo (MediaMetadataRetriever)
-            if (extractedLyrics.isBlank()) {
-                try {
-                    val rawLyrics = retriever.extractMetadata(1000) // METADATA_KEY_LYRICS
-                    if (!rawLyrics.isNullOrBlank()) {
-                        extractedLyrics = cleanExtractedLyrics(rawLyrics)
-                    }
-                } catch (e: Exception) {
-                    Log.d(TAG, "No embedded lyrics found via MediaMetadataRetriever")
+            // Fallback to MediaMetadataRetriever (very reliable for Opus/M4A on Android)
+            try {
+                val mmr = MediaMetadataRetriever()
+                if (track.contentUri != Uri.EMPTY) {
+                    mmr.setDataSource(context, track.contentUri)
+                } else {
+                    mmr.setDataSource(track.path)
                 }
-            }
-
-            val finalLyrics = if (extractedLyrics.isNotBlank()) extractedLyrics else track.lyrics
-
-            track.copy(
-                title = title,
-                artist = artist,
-                album = album,
-                durationMs = durationMs,
-                trackNumber = trackNumber,
-                year = year,
-                genre = genre,
-                bitrate = bitrate,
-                sampleRate = sampleRate,
                 
-                lyrics = finalLyrics
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in extractFullMetadata: ${e.message}", e)
-            track
-        } finally {
-            try {
-                retriever.release()
-            } catch (e: Exception) {}
-            try {
-                tempCacheFile?.delete()
-            } catch (e: Exception) {}
+                mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.takeIf { it.isNotBlank() }?.let { title = it }
+                mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)?.takeIf { it.isNotBlank() }?.let { artist = it }
+                mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)?.takeIf { it.isNotBlank() }?.let { album = it }
+                mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)?.takeIf { it.isNotBlank() }?.let { genre = it }
+                mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)?.takeIf { it.isNotBlank() }?.toIntOrNull()?.let { year = it }
+                
+                if (durationMs <= 0L) {
+                    mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.let { durationMs = it }
+                }
+                
+                mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toIntOrNull()?.let { 
+                    if (bitrate.isEmpty()) bitrate = "${it / 1000} kbps" 
+                }
+                
+                mmr.release()
+            } catch (e: Exception) {
+                Log.d("MetadataReader", "MMR failed: ${e.message}")
+            }
         }
+
+        val lyricsResult = AudioLyricsExtractor.extractLyrics(context, track.contentUri, track.path.takeIf { it.isNotBlank() && !it.startsWith("content://") })
+        var extractedLyrics = lyricsResult.lyrics ?: ""
+        if (extractedLyrics.isNotBlank()) {
+            extractedLyrics = cleanExtractedLyrics(extractedLyrics)
+        }
+
+        val finalLyrics = if (extractedLyrics.isNotBlank()) extractedLyrics else track.lyrics
+        
+        return track.copy(
+            title = title,
+            artist = artist,
+            album = album,
+            durationMs = durationMs,
+            trackNumber = trackNumber,
+            year = year,
+            genre = genre,
+            bitrate = bitrate,
+            sampleRate = sampleRate,
+            lyrics = finalLyrics
+        )
     }
 
     private fun isGenericName(str: String): Boolean {

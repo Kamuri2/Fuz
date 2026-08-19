@@ -7,6 +7,8 @@ import com.example.data.local.TrackEntity
 import com.example.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,25 +41,72 @@ object TrackRepository {
         }
     }
 
-    suspend fun saveScannedTracks(context: Context, newTracks: List<Track>): List<Track> {
+    /**
+     * Scans and enriches all tracks in a single upfront parallel pass, saving all metadata,
+     * tags and lyrics permanently to the local Room database so it never needs to be re-scanned.
+     */
+    suspend fun saveScannedTracks(context: Context, newTracks: List<Track>, forceRescan: Boolean = false): List<Track> {
         if (newTracks.isEmpty()) return emptyList()
         return withContext(Dispatchers.IO) {
             try {
                 val db = AppDatabase.getDatabase(context)
                 val existing = db.trackDao().getAllTracks().associateBy { it.id }
-                
-                val entitiesToSave = newTracks.map { track ->
+
+                // 1. Separate tracks into already fully-cached vs tracks that need tag/lyrics extraction
+                val fullyEnrichedTracks = mutableListOf<Track>()
+                val tracksNeedingEnrichment = mutableListOf<Track>()
+
+                for (track in newTracks) {
                     val cached = existing[track.id]
-                    val mergedLyrics = if (track.lyrics.isNotBlank()) track.lyrics else (cached?.lyrics ?: "")
-                    val mergedTrack = track.copy(lyrics = mergedLyrics)
-                    TrackEntity.fromTrack(mergedTrack)
+                    // If cached track already exists and has complete metadata or lyrics, reuse it directly
+                    if (!forceRescan && cached != null && (cached.lyrics.isNotBlank() || (cached.genre.isNotBlank() && cached.bitrate.isNotBlank()))) {
+                        fullyEnrichedTracks.add(cached.toTrack())
+                    } else {
+                        tracksNeedingEnrichment.add(track)
+                    }
                 }
-                
+
+                // 2. Process tracks needing enrichment in parallel batches (16 concurrent extractions)
+                val newlyEnriched = if (tracksNeedingEnrichment.isNotEmpty()) {
+                    Log.d(TAG, "Extracting full metadata and lyrics upfront for ${tracksNeedingEnrichment.size} tracks...")
+                    tracksNeedingEnrichment.chunked(16).flatMap { chunk ->
+                        chunk.map { track ->
+                            async(Dispatchers.IO) {
+                                try {
+                                    val cached = existing[track.id]
+                                    var enriched = MetadataReader.extractFullMetadata(context, track)
+                                    // If cached had lyrics, preserve it if extractor didn't find new ones
+                                    if (enriched.lyrics.isBlank() && cached != null && cached.lyrics.isNotBlank()) {
+                                        enriched = enriched.copy(lyrics = cached.lyrics)
+                                    }
+                                    enriched
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error enriching track ${track.title}: ${e.message}")
+                                    track
+                                }
+                            }
+                        }.awaitAll()
+                    }
+                } else {
+                    emptyList()
+                }
+
+                // 3. Combine all tracks and save to Room
+                val allEnrichedTracks = (fullyEnrichedTracks + newlyEnriched).distinctBy { it.id }.sortedBy { it.title.lowercase() }
+                val entitiesToSave = allEnrichedTracks.map { TrackEntity.fromTrack(it) }
+
                 db.trackDao().insertOrUpdateTracks(entitiesToSave)
-                val mergedList = entitiesToSave.map { it.toTrack() }
-                _tracks.value = mergedList
-                Log.d(TAG, "Successfully cached ${entitiesToSave.size} tracks to Room DB")
-                mergedList
+
+                val validIds = allEnrichedTracks.map { it.id }
+                if (validIds.isNotEmpty()) {
+                    try {
+                        db.trackDao().deleteMissing(validIds)
+                    } catch (e: Exception) {}
+                }
+
+                _tracks.value = allEnrichedTracks
+                Log.d(TAG, "Successfully cached ${allEnrichedTracks.size} fully enriched tracks in Room DB")
+                allEnrichedTracks
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving scanned tracks to Room: ${e.message}")
                 newTracks
@@ -71,7 +120,7 @@ object TrackRepository {
             try {
                 val db = AppDatabase.getDatabase(context)
                 db.trackDao().updateLyrics(trackId, lyrics)
-                
+
                 val updated = _tracks.value.map {
                     if (it.id == trackId) it.copy(lyrics = lyrics) else it
                 }

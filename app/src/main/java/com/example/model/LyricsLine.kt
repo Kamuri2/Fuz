@@ -21,11 +21,14 @@ object LyricsParser {
         val lines = mutableListOf<LyricsLine>()
         // Permissive regex for formats like [mm:ss], [m:ss.ms], <mm:ss.ms>, [mm:ss:ms]
         val lrcRegex = Regex("(?:\\[|<)(\\d{1,3}):(\\d{1,2})(?:[.:](\\d{1,3}))?(?:\\]|>)(.*)")
+        
+        var hasAnyTimestamps = false
 
         lrcText.lines().forEach { line ->
             val cleanLine = line.trim()
             val match = lrcRegex.find(cleanLine)
             if (match != null) {
+                hasAnyTimestamps = true
                 val minsStr = match.groupValues[1]
                 val secsStr = match.groupValues[2]
                 val msStr = match.groupValues[3]
@@ -40,14 +43,37 @@ object LyricsParser {
                 if (content.isNotBlank()) {
                     lines.add(LyricsLine(timestamp, content.trim()))
                 }
-            } else if (cleanLine.isNotBlank() && !cleanLine.startsWith("[") && !cleanLine.startsWith("<")) {
-                // Plain unsynced text line without timestamps
-                lines.add(LyricsLine(0L, cleanLine))
             } else if (cleanLine.isNotBlank()) {
-                // If it starts with [ but didn't match the regex (e.g. [Chorus]), just treat it as text
-                lines.add(LyricsLine(0L, cleanLine.replace(Regex("(?:\\[|<).*?(?:\\]|>)"), "").trim()))
+                // Keep the text, but assign it a negative timestamp so it doesn't mess up playback
+                // if it's metadata. We will filter these out later if it's a synced file.
+                val content = if (cleanLine.startsWith("[") || cleanLine.startsWith("<")) {
+                    cleanLine.replace(Regex("(?:\\[|<).*?(?:\\]|>)"), "").trim()
+                } else {
+                    cleanLine
+                }
+                if (content.isNotBlank()) {
+                    lines.add(LyricsLine(-1L, content))
+                }
             }
         }
-        return lines.sortedBy { it.timestampMs }
+        
+        // If there were no valid timestamps at all, it's an unsynced lyrics file.
+        // Returning an empty list tells the UI to render the raw string as static text.
+        if (!hasAnyTimestamps) {
+            return emptyList()
+        }
+
+        // For synced lyrics, assign any unsynced interstitial lines to the previous timestamp
+        var lastTimestamp = 0L
+        val fixedLines = lines.map { 
+            if (it.timestampMs >= 0) {
+                lastTimestamp = it.timestampMs
+                it
+            } else {
+                it.copy(timestampMs = lastTimestamp)
+            }
+        }
+
+        return fixedLines.sortedBy { it.timestampMs }
     }
 }
