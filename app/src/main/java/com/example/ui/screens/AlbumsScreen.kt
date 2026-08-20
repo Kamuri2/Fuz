@@ -87,6 +87,7 @@ import androidx.compose.material.icons.filled.Mic
 fun AlbumsScreen(
     settings: com.example.model.AppSettings,
     tracks: List<Track>,
+    initialAlbumName: String? = null,
     onPlayAlbum: (List<Track>, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -94,7 +95,8 @@ fun AlbumsScreen(
         tracks.groupBy { it.album }
     }
     
-    var selectedAlbum by remember { mutableStateOf<String?>(null) }
+    var selectedAlbum by remember { mutableStateOf<String?>(initialAlbumName) }
+    LaunchedEffect(initialAlbumName) { if(initialAlbumName != null) selectedAlbum = initialAlbumName }
     BackHandler(enabled = selectedAlbum != null) {
         selectedAlbum = null
     }
@@ -249,6 +251,7 @@ fun AlbumsScreen(
 fun AlbumDetailScreen(
     albumName: String,
     tracks: List<Track>,
+    initialAlbumName: String? = null,
     onBack: () -> Unit,
     onPlayTrack: (Int) -> Unit,
     onShuffleAll: () -> Unit

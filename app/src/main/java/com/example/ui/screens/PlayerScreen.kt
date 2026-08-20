@@ -60,17 +60,7 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbDownOffAlt
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -117,7 +107,7 @@ fun PlayerScreen(
     loopMode: LoopMode,
     isFavorite: Boolean,
     isDisliked: Boolean,
-    playlistsMap: Map<String, List<Track>>,
+    playlists: List<com.example.data.local.PlaylistEntity> = emptyList(),
     onPlayPauseToggle: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -127,7 +117,8 @@ fun PlayerScreen(
     onFavoriteToggle: () -> Unit,
     onDislikeToggle: () -> Unit,
     onOpenQueue: () -> Unit,
-    onAddToPlaylist: (String) -> Unit,
+    onAddToPlaylist: (Long) -> Unit = {},
+    onCreatePlaylistAndAdd: (String) -> Unit = {},
     onBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -877,41 +868,166 @@ fun PlayerScreen(
 
         // Modal to add song to custom playlists
         if (showAddToPlaylistModal) {
+            var showNewPlaylistInput by remember { mutableStateOf(false) }
+            var newPlaylistNameInput by remember { mutableStateOf("") }
+
             ModalBottomSheet(
                 onDismissRequest = { showAddToPlaylistModal = false },
-                containerColor = Color(0xFF1E1E1E) // Solid dark background for readability
+                containerColor = Color(0xFF181818) // Clean Spotify-dark background
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(24.dp)
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
                 ) {
-                    Text(
-                        com.example.ui.Translations.get(settings.appLanguage, "add_to_playlist"),
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    playlistsMap.keys.forEach { playlistName ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clickable {
-                                    onAddToPlaylist(playlistName)
-                                    showAddToPlaylistModal = false
-                                },
-                            colors = CardDefaults.cardColors(containerColor = Color(0x2AFFFFFF))
-                        ) {
-                            Text(
-                                text = playlistName,
-                                fontSize = 16.sp,
-                                color = Color.White,
-                                modifier = Modifier.padding(16.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            com.example.ui.Translations.get(settings.appLanguage, "add_to_playlist"),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        IconButton(onClick = { showNewPlaylistInput = !showNewPlaylistInput }) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Create playlist",
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
+
+                    if (showNewPlaylistInput) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = newPlaylistNameInput,
+                                onValueChange = { newPlaylistNameInput = it },
+                                placeholder = { Text("Nombre de playlist...", color = Color.Gray) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    if (newPlaylistNameInput.isNotBlank()) {
+                                        onCreatePlaylistAndAdd(newPlaylistNameInput.trim())
+                                        newPlaylistNameInput = ""
+                                        showNewPlaylistInput = false
+                                        showAddToPlaylistModal = false
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("Crear", color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    val userPlaylists = remember(playlists) {
+                        playlists.filter { it.name != "All Songs" }
+                    }
+
+                    if (userPlaylists.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No hay playlists creadas aún.\nToca el botón + para crear una.",
+                                color = GlassTextSecondary,
+                                textAlign = TextAlign.Center,
+                                fontSize = 14.sp
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(userPlaylists.size) { index ->
+                                val pl = userPlaylists[index]
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0x1FFFFFFF))
+                                        .clickable {
+                                            onAddToPlaylist(pl.playlistId)
+                                            showAddToPlaylistModal = false
+                                        }
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF2A2A2A)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (pl.imageUri != null) {
+                                            AsyncImage(
+                                                model = android.net.Uri.parse(pl.imageUri),
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.MusicNote,
+                                                contentDescription = null,
+                                                tint = Color.White.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = pl.name,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (!pl.description.isNullOrBlank()) {
+                                            Text(
+                                                text = pl.description,
+                                                fontSize = 12.sp,
+                                                color = GlassTextSecondary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Add",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }

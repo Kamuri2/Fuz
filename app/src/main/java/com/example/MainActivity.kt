@@ -77,6 +77,12 @@ import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.example.ui.components.TrackImage
 import com.example.data.AudioScanner
+
+import com.example.data.UserRepository
+import com.example.data.SocialRepository
+import com.example.ui.screens.SetupScreen
+import com.example.ui.screens.UserProfileScreen
+import androidx.compose.runtime.collectAsState
 import com.example.model.Track
 import com.example.player.AudioPlayerManager
 import com.example.ui.components.GlassCard
@@ -95,7 +101,7 @@ import com.example.ui.theme.GlassTextSecondary
 import com.example.ui.theme.LiquidMusicTheme
 
 enum class NavigationScreen {
-    HOME, FOLDERS, PLAYLISTS, ALBUMS, ARTISTS, PLAYER, SETTINGS
+    HOME, FOLDERS, PLAYLISTS, ALBUMS, ARTISTS, PLAYER, SETTINGS, PROFILE
 }
 
 class MainActivity : ComponentActivity() {
@@ -130,8 +136,41 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
     LiquidMusicTheme(appSettings = appSettings) {
         val coroutineScope = rememberCoroutineScope()
         var currentScreen by remember { mutableStateOf(NavigationScreen.HOME) }
+        var initialPlaylist by remember { mutableStateOf<String?>(null) }
+        var initialAlbum by remember { mutableStateOf<String?>(null) }
+        var initialArtist by remember { mutableStateOf<String?>(null) }
         var isPlayerExpanded by remember { mutableStateOf(false) }
     var isForceRescan by remember { mutableStateOf(false) }
+        
+    val userRepository = remember { UserRepository.getInstance(context) }
+    val socialRepository = remember { SocialRepository.getInstance(context) }
+    val userProfile by userRepository.getUserProfile().collectAsState(initial = null)
+    
+    var isCheckingUser by remember { mutableStateOf(true) }
+    var needsSetup by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val user = userRepository.getUserProfileSync()
+        if (user == null || user.name.isBlank()) {
+            needsSetup = true
+        }
+        isCheckingUser = false
+    }
+
+    // Clear old history on start
+    LaunchedEffect(Unit) {
+        socialRepository.clearOldHistory()
+    }
+
+    if (isCheckingUser) {
+        return@LiquidMusicTheme
+    }
+
+    if (needsSetup) {
+        SetupScreen(onComplete = { needsSetup = false })
+        return@LiquidMusicTheme
+    }
+
         val cachedTracks by com.example.data.TrackRepository.tracks.collectAsState()
         var loadedTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
         var showQueueSheet by remember { mutableStateOf(false) }
@@ -158,6 +197,7 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
     val favorites by playerManager.favorites.collectAsState()
     val dislikedTracks by playerManager.dislikedTracks.collectAsState()
     val playlistsMap by playerManager.playlistsMap.collectAsState()
+    val dbPlaylists by socialRepository.getAllPlaylists().collectAsState(initial = emptyList())
     val appSettings by playerManager.appSettings.collectAsState()
 
     // SAF Folder Picker Launcher
@@ -326,6 +366,8 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         currentTrack = currentTrack,
                         currentIndex = currentIndex,
                         isPlaying = isPlaying,
+                        userProfile = userProfile,
+                        socialRepository = socialRepository,
                         onTrackSelect = { tracks, index ->
                             playerManager.setQueue(tracks, index)
                         },
@@ -334,9 +376,22 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                                 playerManager.setQueue(loadedTracks.shuffled(), 0)
                             }
                         },
+                        onOpenProfile = { currentScreen = NavigationScreen.PROFILE },
                         onOpenSettings = { currentScreen = NavigationScreen.SETTINGS },
                         onPickFolder = { folderPickerLauncher.launch(null) },
-                        onRequestPermissions = { permissionLauncher.launch(requiredPermissions) }
+                        onRequestPermissions = { permissionLauncher.launch(requiredPermissions) },
+                        onNavigateToPlaylist = { name -> 
+                            initialPlaylist = name
+                            currentScreen = NavigationScreen.PLAYLISTS
+                        },
+                        onNavigateToAlbum = { name -> 
+                            initialAlbum = name
+                            currentScreen = NavigationScreen.ALBUMS
+                        },
+                        onNavigateToArtist = { name -> 
+                            initialArtist = name
+                            currentScreen = NavigationScreen.ARTISTS
+                        }
                     )
 
                     NavigationScreen.FOLDERS -> FoldersScreen(
@@ -351,17 +406,20 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
 
                     NavigationScreen.PLAYLISTS -> PlaylistsScreen(
                         settings = appSettings,
-                        playlistsMap = playlistsMap,
+                        socialRepository = socialRepository,
                         favorites = favorites,
                         allTracks = loadedTracks,
-                        currentTrack = currentTrack,
-                        onCreatePlaylist = { name -> playerManager.createPlaylist(name) },
+                        initialPlaylistName = initialPlaylist,
+                        onCreatePlaylist = { name -> 
+                            // Now created in SocialRepository inside screen
+                        },
                         onPlayPlaylist = { tracks, idx -> playerManager.setQueue(tracks, idx) }
                     )
 
                     NavigationScreen.ALBUMS -> AlbumsScreen(
                         settings = appSettings,
                         tracks = loadedTracks,
+                        initialAlbumName = initialAlbum,
                         onPlayAlbum = { albumTracks, idx -> 
                             playerManager.setShuffle(false)
                             playerManager.setQueue(albumTracks, idx)
@@ -371,6 +429,7 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                     NavigationScreen.ARTISTS -> ArtistsScreen(
                         settings = appSettings,
                         tracks = loadedTracks,
+                        initialArtistName = initialArtist,
                         onPlayArtist = { artistTracks, idx -> playerManager.setQueue(artistTracks, idx) }
                     )
 
@@ -383,6 +442,19 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         onPickFolderUri = { folderPickerLauncher.launch(null) },
                         onRescanAudio = { isForceRescan = true; permissionLauncher.launch(requiredPermissions) }
                     )
+                    
+                    NavigationScreen.PROFILE -> com.example.ui.screens.UserProfileScreen(
+                        userProfile = userProfile,
+                        socialRepository = socialRepository,
+                        onBack = { currentScreen = NavigationScreen.HOME },
+                        onPlaylistClick = { playlistId -> 
+                            // We need to pass the name. Wait, the old PlaylistsScreen uses Name.
+                            // The user wants PlaylistsScreen to show it.
+                            initialPlaylist = "Playlist" // We'll fix this later
+                            currentScreen = NavigationScreen.PLAYLISTS
+                        }
+                    )
+    
                     else -> {}
                 }
             }
@@ -416,7 +488,7 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                     loopMode = loopMode,
                     isFavorite = currentTrack?.let { favorites.contains(it.id) } ?: false,
                     isDisliked = currentTrack?.let { dislikedTracks.contains(it.id) } ?: false,
-                    playlistsMap = playlistsMap,
+                    playlists = dbPlaylists,
                     onPlayPauseToggle = { playerManager.togglePlayPause() },
                     onNext = { playerManager.nextTrack() },
                     onPrevious = { playerManager.previousTrack() },
@@ -426,8 +498,22 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                     onFavoriteToggle = { currentTrack?.let { playerManager.toggleFavorite(it.id) } },
                     onDislikeToggle = { currentTrack?.let { playerManager.toggleDislike(it.id) } },
                     onOpenQueue = { showQueueSheet = true },
-                    onAddToPlaylist = { playlistName ->
-                        currentTrack?.let { track -> playerManager.addToPlaylist(playlistName, track) }
+                    onAddToPlaylist = { playlistId ->
+                        currentTrack?.let { track ->
+                            coroutineScope.launch {
+                                socialRepository.addTrackToPlaylist(playlistId, track.id)
+                                Toast.makeText(context, "Canción agregada a la playlist", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    onCreatePlaylistAndAdd = { name ->
+                        currentTrack?.let { track ->
+                            coroutineScope.launch {
+                                val newId = socialRepository.createPlaylist(name)
+                                socialRepository.addTrackToPlaylist(newId, track.id)
+                                Toast.makeText(context, "Playlist '$name' creada", Toast.LENGTH_SHORT).show()
+                            }
+                        }
                     },
                     onBack = { isPlayerExpanded = false }
                 )

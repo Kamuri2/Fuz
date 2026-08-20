@@ -9,6 +9,7 @@ import android.os.Looper
 import android.util.Log
 import com.example.model.AppSettings
 import com.example.model.AppTheme
+import com.example.data.SocialRepository
 import com.example.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +35,7 @@ enum class EqPreset(val displayName: String, val bass: Float, val mid: Float, va
 }
 
 class AudioPlayerManager private constructor(private val context: Context) {
+    private val socialRepository: SocialRepository by lazy { SocialRepository.getInstance(context) }
 
     companion object {
         private const val TAG = "AudioPlayerManager"
@@ -390,6 +392,10 @@ class AudioPlayerManager private constructor(private val context: Context) {
         _currentIndex.value = index
         _currentTrack.value = track
         saveLastTrackId(track.id)
+
+        scope.launch {
+            socialRepository.recordPlayback(track.id)
+        }
 
         val currentSession = ++activeSessionId
 

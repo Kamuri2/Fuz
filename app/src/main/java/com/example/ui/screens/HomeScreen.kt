@@ -1,61 +1,41 @@
 package com.example.ui.screens
 
-import androidx.compose.material3.MaterialTheme
-import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.QueueMusic
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.ui.components.TrackImage
+import com.example.data.ArtistImageRepository
+import com.example.data.SocialRepository
+import com.example.data.local.PlaylistEntity
+import com.example.data.local.UserEntity
 import com.example.model.Track
+import com.example.ui.components.TrackImage
 import com.example.ui.theme.GlassTextMuted
-import com.example.ui.theme.GlassTextPrimary
 import com.example.ui.theme.GlassTextSecondary
-import androidx.compose.material.icons.filled.Mic
 
 @Composable
 fun HomeScreen(
@@ -63,274 +43,342 @@ fun HomeScreen(
     currentTrack: Track?,
     currentIndex: Int,
     isPlaying: Boolean,
+    userProfile: UserEntity?,
+    socialRepository: SocialRepository,
     onTrackSelect: (List<Track>, Int) -> Unit,
     onShuffleAll: () -> Unit,
+    onOpenProfile: () -> Unit,
     onOpenSettings: () -> Unit,
     onPickFolder: () -> Unit = {},
     onRequestPermissions: () -> Unit = {},
+    onNavigateToPlaylist: (String) -> Unit = {},
+    onNavigateToAlbum: (String) -> Unit = {},
+    onNavigateToArtist: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-
-    val filteredTracks = remember(tracks, searchQuery) {
-        if (searchQuery.isBlank()) tracks
-        else tracks.filter {
-            it.title.contains(searchQuery, ignoreCase = true) ||
-            it.artist.contains(searchQuery, ignoreCase = true) ||
-            it.album.contains(searchQuery, ignoreCase = true)
-        }
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 8.dp)
-    ) {
-        // Top Row: HOME Title and Settings Icon (Matching Screenshot #1)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "HOME",
-                fontSize = 38.sp,
-                fontWeight = FontWeight.Black,
-                color = Color.White,
-                letterSpacing = 1.sp
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0x1AFFFFFF))
-                    .clickable { onOpenSettings() }
-                    .testTag("home_settings_btn"),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Settings",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Song Count Indicator & Shuffle Button (Matching Screenshot #1)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.QueueMusic,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                val posStr = if (currentIndex >= 0 && tracks.isNotEmpty()) "${currentIndex + 1}" else "1"
-                Text(
-                    text = "$posStr / ${tracks.size}",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-
-            // Shuffle Pill Button
-            Button(
-                onClick = onShuffleAll,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.testTag("home_shuffle_btn")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Shuffle,
-                    contentDescription = null,
-                    tint = Color.Black,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Shuffle", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Search Bar (Matching Screenshot #1)
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            placeholder = { Text("Search for songs, artists, albums...", color = GlassTextMuted, fontSize = 14.sp) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = GlassTextMuted
-                )
-            },
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color(0x1AFFFFFF),
-                unfocusedContainerColor = Color(0x1AFFFFFF),
-                focusedBorderColor = Color(0xFF333333),
-                unfocusedBorderColor = Color(0x1AFFFFFF),
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("home_search_input")
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Song List
-        if (filteredTracks.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.5f),
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = if (tracks.isEmpty()) "No hay música en la biblioteca" else "No se encontraron canciones",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Selecciona una carpeta local o concede permisos de almacenamiento para explorar tus archivos de audio.",
-                        color = GlassTextMuted,
-                        fontSize = 14.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    Button(
-                        onClick = onPickFolder,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier.fillMaxWidth(0.85f)
-                    ) {
-                        Text("Seleccionar Carpeta de Música", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = onRequestPermissions,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0x1AFFFFFF)),
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier.fillMaxWidth(0.85f)
-                    ) {
-                        Text("Conceder Permisos de Almacenamiento", color = Color.White.copy(alpha = 0.9f))
-                    }
-                }
-            }
+    val playlists by socialRepository.getAllPlaylists().collectAsState(initial = emptyList())
+    val topArtists by socialRepository.getTopArtistsToday().collectAsState(initial = emptyList())
+    
+    // Recommendations (Random Albums changing every hour)
+    val currentHour = (System.currentTimeMillis() / 3600000).toInt()
+    val recommendedAlbums = remember(currentHour, tracks) {
+        if (tracks.isNotEmpty()) {
+            val random = java.util.Random(currentHour.toLong())
+            val allAlbums = tracks.distinctBy { it.album }
+            allAlbums.shuffled(random).take(10)
         } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                itemsIndexed(
-                    items = filteredTracks,
-                    key = { _, track -> track.id }
-                ) { index, track ->
-                    HomeTrackCardItem(
-                        track = track,
-                        isCurrent = currentTrack?.id == track.id,
-                        onClick = { onTrackSelect(filteredTracks, index) }
-                    )
-                }
-                item { Spacer(modifier = Modifier.height(100.dp)) }
-            }
+            emptyList()
         }
     }
-}
 
-@Composable
-private fun HomeTrackCardItem(
-    track: Track,
-    isCurrent: Boolean,
-    onClick: () -> Unit
-) {
-    val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Square Album Artwork
+    if (tracks.isEmpty()) {
         Box(
-            modifier = Modifier
-                .size(70.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color(0x1AFFFFFF)),
+            modifier = modifier.fillMaxSize().padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
-            when {
-                true -> TrackImage(track = track, modifier = Modifier.fillMaxSize())
-                else -> Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.size(64.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "No hay música en la biblioteca",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Selecciona una carpeta local o concede permisos de almacenamiento para explorar tus archivos de audio.",
+                    color = GlassTextMuted,
+                    fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = onPickFolder,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth(0.85f)
+                ) {
+                    Text("Seleccionar Carpeta", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onRequestPermissions,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x1AFFFFFF)),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth(0.85f)
+                ) {
+                    Text("Conceder Permisos", color = Color.White.copy(alpha = 0.9f))
+                }
             }
         }
+        return
+    }
 
-        Spacer(modifier = Modifier.width(16.dp))
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        item {
+            // Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.2f))
+                            .clickable { onOpenProfile() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (userProfile?.profileImageUri != null) {
+                            AsyncImage(
+                                model = Uri.parse(userProfile.profileImageUri),
+                                contentDescription = "Profile",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = userProfile?.name?.take(1)?.uppercase() ?: "U",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Good Evening", // In a real app this would be based on time
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
 
-        // Title and Artist (Matching Screenshot #1)
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = track.title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isCurrent) Color(0xFF00F0FF) else Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                if (track.lyrics.isNotBlank()) {
-                    Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x1AFFFFFF))
+                        .clickable { onOpenSettings() },
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "Lyrics available",
-                        tint = GlassTextMuted,
-                        modifier = Modifier.size(16.dp)
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = track.artist,
-                fontSize = 14.sp,
-                color = GlassTextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
+
+        // Top Grid (Liked Songs, All Songs & Playlists)
+        item {
+            data class GridItem(val label: String, val imageUri: String?, val isSpecial: Int, val onClick: () -> Unit)
+            val gridItems = mutableListOf<GridItem>()
+            gridItems.add(GridItem("Liked Songs", null, 1, { onNavigateToPlaylist("Mis Favoritas") }))
+            gridItems.add(GridItem("All Songs", null, 2, { onNavigateToPlaylist("All Songs") }))
+            
+            // Add playlists up to 4 more to make max 6
+            playlists.take(4).forEach { p ->
+                gridItems.add(GridItem(p.name, p.imageUri, 0, { onNavigateToPlaylist(p.name) }))
+            }
+
+            Column {
+                val chunked = gridItems.chunked(2)
+                chunked.forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowItems.forEach { item ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(60.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF2A2A2A))
+                                    .clickable { item.onClick() },
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(60.dp)
+                                            .background(
+                                                when(item.isSpecial) {
+                                                    1 -> Color(0xFF5A3598)
+                                                    2 -> Color(0xFF1E88E5)
+                                                    else -> Color(0xFF333333)
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (item.imageUri != null) {
+                                            AsyncImage(
+                                                model = Uri.parse(item.imageUri),
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else if (item.isSpecial == 1) {
+                                            Icon(Icons.Default.Favorite, contentDescription = null, tint = Color.White)
+                                        } else if (item.isSpecial == 2) {
+                                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.White)
+                                        } else {
+                                            Icon(Icons.Default.Folder, contentDescription = null, tint = Color.White)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = item.label,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+                        if (rowItems.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f)) // filler
+                        }
+                    }
+                }
+            }
+        }
+
+        // Middle Section: Top Artists
+        if (topArtists.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Top artists today",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(topArtists) { artist ->
+                        var artistImageUrl by remember { mutableStateOf<String?>(null) }
+                        LaunchedEffect(artist.artist) {
+                            artistImageUrl = ArtistImageRepository.getArtistImageUrl(artist.artist)
+                        }
+                        
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .width(100.dp)
+                                .clickable { onNavigateToArtist(artist.artist) }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF333333)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (artistImageUrl != null) {
+                                    AsyncImage(
+                                        model = artistImageUrl,
+                                        contentDescription = artist.artist,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Text(
+                                        text = artist.artist.take(1).uppercase(),
+                                        color = Color.White,
+                                        fontSize = 32.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = artist.artist,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Bottom Section: Recommendations (Albums)
+        if (recommendedAlbums.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Recommended for you",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(recommendedAlbums) { trackAlbum ->
+                        Column(
+                            modifier = Modifier
+                                .width(140.dp)
+                                .clickable { onNavigateToAlbum(trackAlbum.album) },
+                            horizontalAlignment = Alignment.Start
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(140.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                            ) {
+                                TrackImage(track = trackAlbum, modifier = Modifier.fillMaxSize())
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = trackAlbum.album,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = trackAlbum.artist,
+                                color = GlassTextSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        
+        item { Spacer(modifier = Modifier.height(100.dp)) }
     }
 }

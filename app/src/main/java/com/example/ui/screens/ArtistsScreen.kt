@@ -107,6 +107,7 @@ import androidx.compose.material.icons.filled.Mic
 fun ArtistsScreen(
     settings: com.example.model.AppSettings,
     tracks: List<Track>,
+    initialArtistName: String? = null,
     onPlayArtist: (List<Track>, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -116,7 +117,8 @@ fun ArtistsScreen(
             .toSortedMap(String.CASE_INSENSITIVE_ORDER)
     }
     
-    var selectedArtist by remember { mutableStateOf<String?>(null) }
+    var selectedArtist by remember { mutableStateOf<String?>(initialArtistName) }
+    LaunchedEffect(initialArtistName) { if(initialArtistName != null) selectedArtist = initialArtistName }
     BackHandler(enabled = selectedArtist != null) {
         selectedArtist = null
     }
@@ -294,6 +296,7 @@ fun ArtistsScreen(
 fun ArtistDetailScreen(
     artistName: String,
     tracks: List<Track>,
+    initialArtistName: String? = null,
     onBack: () -> Unit,
     onPlayTrack: (Int) -> Unit,
     onShuffleAll: () -> Unit,
