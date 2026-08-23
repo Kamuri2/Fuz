@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -167,6 +168,32 @@ fun FoldersScreen(
             // Folder Track List Details
             val activeTracks = folderGroups[selectedFolder] ?: emptyList()
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { if (activeTracks.isNotEmpty()) onPlayFolder(activeTracks, 0) },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.Black)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Play", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { if (activeTracks.isNotEmpty()) onPlayFolder(activeTracks.shuffled(), 0) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FFFFFF)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Shuffle, contentDescription = "Shuffle", tint = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Shuffle", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
                 items(activeTracks) { track ->
                     val isCurrent = currentTrack?.id == track.id
                     Card(
@@ -182,6 +209,15 @@ fun FoldersScreen(
                                 .padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF222222))
+                            ) {
+                                com.example.ui.components.TrackImage(track = track, modifier = Modifier.fillMaxSize())
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(

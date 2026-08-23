@@ -58,6 +58,9 @@ class PlaybackService : Service() {
         }
     }
 
+    private var lastTrackForImage: Long? = null
+    private var lastLoadedBitmap: android.graphics.Bitmap? = null
+
     private fun updateNotificationAndSession() {
         val track = playerManager.currentTrack.value ?: return
         val isPlaying = playerManager.isPlaying.value
@@ -74,58 +77,74 @@ class PlaybackService : Service() {
             .putString(MediaMetadata.METADATA_KEY_ALBUM, track.album)
             .putLong(MediaMetadata.METADATA_KEY_DURATION, track.durationMs)
 
+        if (lastTrackForImage != track.id) {
+            lastTrackForImage = track.id
+            lastLoadedBitmap = null
+            
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 var albumArtBitmap: android.graphics.Bitmap? = null
-        try {
-            var rawBytes: ByteArray? = null
-            if (track.path.isNotBlank()) {
                 try {
-                    val file = java.io.File(track.path)
-                    if (file.exists() && file.canRead()) {
-                        val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
-                        rawBytes = audioFile.tag?.firstArtwork?.binaryData
+                    var rawBytes: ByteArray? = null
+                    if (track.path.isNotBlank()) {
+                        try {
+                            val file = java.io.File(track.path)
+                            if (file.exists() && file.canRead()) {
+                                val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+                                rawBytes = audioFile.tag?.firstArtwork?.binaryData
+                            }
+                        } catch (e: Exception) {}
+                    }
+                    
+                    if (rawBytes != null && rawBytes.isNotEmpty()) {
+                        val options = BitmapFactory.Options().apply {
+                            inSampleSize = 2
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                        }
+                        albumArtBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
                     }
                 } catch (e: Exception) {}
-            }
-            
-            if (rawBytes != null && rawBytes.isNotEmpty()) {
-                val options = BitmapFactory.Options().apply {
-                    inSampleSize = 2
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                
+                if (albumArtBitmap == null && track.albumArtUri != null) {
+                    try {
+                        val pfd = contentResolver.openFileDescriptor(track.albumArtUri, "r")
+                        if (pfd != null) {
+                            val fd = pfd.fileDescriptor
+                            val boundsOptions = BitmapFactory.Options().apply {
+                                inJustDecodeBounds = true
+                            }
+                            BitmapFactory.decodeFileDescriptor(fd, null, boundsOptions)
+                            var sampleSize = 1
+                            val targetDim = 300
+                            if (boundsOptions.outHeight > targetDim || boundsOptions.outWidth > targetDim) {
+                                val halfHeight = boundsOptions.outHeight / 2
+                                val halfWidth = boundsOptions.outWidth / 2
+                                while (halfHeight / sampleSize >= targetDim && halfWidth / sampleSize >= targetDim) {
+                                    sampleSize *= 2
+                                }
+                            }
+                            val decodeOptions = BitmapFactory.Options().apply {
+                                inSampleSize = sampleSize
+                                inPreferredConfig = Bitmap.Config.ARGB_8888
+                            }
+                            albumArtBitmap = BitmapFactory.decodeFileDescriptor(fd, null, decodeOptions)
+                            pfd.close()
+                        }
+                    } catch (e: Exception) {}
                 }
-                albumArtBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
-            }
-        } catch (e: Exception) {}
-        if (albumArtBitmap == null && track.albumArtUri != null) {
-            try {
-                // For MediaStore URIs, we should also try to limit size if possible, but keeping it simple for now
-                val pfd = contentResolver.openFileDescriptor(track.albumArtUri, "r")
-                if (pfd != null) {
-                    val fd = pfd.fileDescriptor
-                    val boundsOptions = BitmapFactory.Options().apply {
-                        inJustDecodeBounds = true
-                    }
-                    BitmapFactory.decodeFileDescriptor(fd, null, boundsOptions)
-                    var sampleSize = 1
-                    val targetDim = 300
-                    if (boundsOptions.outHeight > targetDim || boundsOptions.outWidth > targetDim) {
-                        val halfHeight = boundsOptions.outHeight / 2
-                        val halfWidth = boundsOptions.outWidth / 2
-                        while (halfHeight / sampleSize >= targetDim && halfWidth / sampleSize >= targetDim) {
-                            sampleSize *= 2
+                
+                if (albumArtBitmap != null) {
+                    lastLoadedBitmap = albumArtBitmap
+                    scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                        if (lastTrackForImage == track.id) {
+                            updateNotificationAndSession() // trigger rebuild with image
                         }
                     }
-                    val decodeOptions = BitmapFactory.Options().apply {
-                        inSampleSize = sampleSize
-                        inPreferredConfig = Bitmap.Config.ARGB_8888
-                    }
-                    albumArtBitmap = BitmapFactory.decodeFileDescriptor(fd, null, decodeOptions)
-                    pfd.close()
                 }
-            } catch (e: Exception) {}
+            }
         }
         
-        if (albumArtBitmap != null) {
-            metadataBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, albumArtBitmap)
+        if (lastLoadedBitmap != null) {
+            metadataBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, lastLoadedBitmap)
         }
         mediaSession.setMetadata(metadataBuilder.build())
 
@@ -167,8 +186,8 @@ class PlaybackService : Service() {
         val nextIntent = Intent(this, PlaybackService::class.java).setAction("NEXT")
         builder.addAction(android.app.Notification.Action.Builder(android.R.drawable.ic_media_next, "Next", PendingIntent.getService(this, 4, nextIntent, PendingIntent.FLAG_IMMUTABLE)).build())
 
-        if (albumArtBitmap != null) {
-            builder.setLargeIcon(albumArtBitmap)
+        if (lastLoadedBitmap != null) {
+            builder.setLargeIcon(lastLoadedBitmap)
         }
 
         if (isPlaying) {

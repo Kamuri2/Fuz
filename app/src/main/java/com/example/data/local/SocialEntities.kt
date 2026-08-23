@@ -34,7 +34,8 @@ data class GenreCount(
 
 data class ArtistCount(
     val artist: String,
-    val count: Int
+    val count: Int,
+    val imageUri: String? = null
 )
 
 @Dao
@@ -63,7 +64,7 @@ interface SocialDao {
     @Query("SELECT t.genre AS genre, COUNT(h.id) AS count FROM playback_history h INNER JOIN cached_tracks t ON h.trackId = t.id WHERE h.timestamp >= :since AND t.genre != '' GROUP BY t.genre ORDER BY count DESC LIMIT 1")
     fun getTopGenreSince(since: Long): Flow<GenreCount?>
 
-    @Query("SELECT t.artist AS artist, COUNT(h.id) AS count FROM playback_history h INNER JOIN cached_tracks t ON h.trackId = t.id WHERE h.timestamp >= :since AND t.artist != '' GROUP BY t.artist ORDER BY count DESC LIMIT 5")
+    @Query("SELECT t.artist AS artist, COUNT(h.id) AS count, MAX(t.albumArtUri) AS imageUri FROM playback_history h INNER JOIN cached_tracks t ON h.trackId = t.id WHERE h.timestamp >= :since AND t.artist != '' GROUP BY t.artist ORDER BY count DESC LIMIT 5")
     fun getTopArtistsSince(since: Long): Flow<List<ArtistCount>>
     
     @Query("DELETE FROM playback_history WHERE timestamp < :before")

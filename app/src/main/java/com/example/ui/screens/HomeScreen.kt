@@ -83,13 +83,13 @@ fun HomeScreen(
                 Icon(
                     imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.5f),
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                     modifier = Modifier.size(64.dp)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "No hay música en la biblioteca",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -108,7 +108,7 @@ fun HomeScreen(
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth(0.85f)
                 ) {
-                    Text("Seleccionar Carpeta", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Seleccionar Carpeta", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
@@ -117,7 +117,7 @@ fun HomeScreen(
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth(0.85f)
                 ) {
-                    Text("Conceder Permisos", color = Color.White.copy(alpha = 0.9f))
+                    Text("Conceder Permisos", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f))
                 }
             }
         }
@@ -144,7 +144,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.2f))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .clickable { onOpenProfile() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -158,7 +158,7 @@ fun HomeScreen(
                         } else {
                             Text(
                                 text = userProfile?.name?.take(1)?.uppercase() ?: "U",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -169,7 +169,7 @@ fun HomeScreen(
                         text = "Good Evening", // In a real app this would be based on time
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 }
 
@@ -177,14 +177,14 @@ fun HomeScreen(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(Color(0x1AFFFFFF))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .clickable { onOpenSettings() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Settings",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -216,7 +216,7 @@ fun HomeScreen(
                                     .weight(1f)
                                     .height(60.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF2A2A2A))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
                                     .clickable { item.onClick() },
                                 contentAlignment = Alignment.CenterStart
                             ) {
@@ -228,7 +228,7 @@ fun HomeScreen(
                                                 when(item.isSpecial) {
                                                     1 -> Color(0xFF5A3598)
                                                     2 -> Color(0xFF1E88E5)
-                                                    else -> Color(0xFF333333)
+                                                    else -> Color(0xFF888888)
                                                 }
                                             ),
                                         contentAlignment = Alignment.Center
@@ -241,17 +241,17 @@ fun HomeScreen(
                                                 modifier = Modifier.fillMaxSize()
                                             )
                                         } else if (item.isSpecial == 1) {
-                                            Icon(Icons.Default.Favorite, contentDescription = null, tint = Color.White)
+                                            Icon(Icons.Default.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.onBackground)
                                         } else if (item.isSpecial == 2) {
-                                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.White)
+                                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onBackground)
                                         } else {
-                                            Icon(Icons.Default.Folder, contentDescription = null, tint = Color.White)
+                                            Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.onBackground)
                                         }
                                     }
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = item.label,
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 14.sp,
                                         maxLines = 2,
@@ -274,7 +274,7 @@ fun HomeScreen(
             item {
                 Text(
                     text = "Top artists today",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 12.dp)
@@ -310,7 +310,7 @@ fun HomeScreen(
                                 } else {
                                     Text(
                                         text = artist.artist.take(1).uppercase(),
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 32.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -319,7 +319,7 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = artist.artist,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
@@ -336,7 +336,7 @@ fun HomeScreen(
             item {
                 Text(
                     text = "Recommended for you",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 12.dp)
@@ -360,7 +360,7 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = trackAlbum.album,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,

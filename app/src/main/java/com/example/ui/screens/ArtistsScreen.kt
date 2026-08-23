@@ -109,6 +109,7 @@ fun ArtistsScreen(
     tracks: List<Track>,
     initialArtistName: String? = null,
     onPlayArtist: (List<Track>, Int) -> Unit,
+    onDismissOverlay: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val artistGroups = remember(tracks) {
@@ -118,9 +119,15 @@ fun ArtistsScreen(
     }
     
     var selectedArtist by remember { mutableStateOf<String?>(initialArtistName) }
+    var searchQuery by remember { mutableStateOf("") }
     LaunchedEffect(initialArtistName) { if(initialArtistName != null) selectedArtist = initialArtistName }
-    BackHandler(enabled = selectedArtist != null) {
-        selectedArtist = null
+    BackHandler(enabled = selectedArtist != null || onDismissOverlay != null) {
+        if (selectedArtist != null) {
+            if (onDismissOverlay != null) onDismissOverlay()
+            else selectedArtist = null
+        } else {
+            onDismissOverlay?.invoke()
+        }
     }
     var showAboutDialog by remember { mutableStateOf(false) }
 
@@ -129,7 +136,10 @@ fun ArtistsScreen(
         ArtistDetailScreen(
             artistName = selectedArtist!!,
             tracks = artistTracks,
-            onBack = { selectedArtist = null },
+            onBack = { 
+                if (onDismissOverlay != null) onDismissOverlay()
+                else selectedArtist = null 
+            },
             onPlayTrack = { index -> onPlayArtist(artistTracks, index) },
             onShuffleAll = { onPlayArtist(artistTracks.shuffled(), 0) },
             onShowAbout = { showAboutDialog = true }
@@ -155,23 +165,40 @@ fun ArtistsScreen(
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(vertical = 12.dp)
             )
+            
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Buscar artista...", color = Color.Gray) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary
+                )
+            )
 
-            if (artistGroups.isEmpty()) {
+            val filteredArtists = remember(artistGroups, searchQuery) {
+                if (searchQuery.isBlank()) artistGroups.keys.toList()
+                else artistGroups.keys.filter { it.contains(searchQuery, ignoreCase = true) }
+            }
+
+            if (filteredArtists.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(com.example.ui.Translations.get(settings.appLanguage, "no_artists"), color = GlassTextMuted)
+                    Text(if (artistGroups.isEmpty()) com.example.ui.Translations.get(settings.appLanguage, "no_artists") else "No hay resultados", color = GlassTextMuted)
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
                 val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
-                val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(3),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxSize().padding(end = 20.dp)
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    items(artistGroups.keys.toList()) { artistName ->
+                    items(filteredArtists) { artistName ->
                         var imageUrl by remember { mutableStateOf<String?>(null) }
                         
                         LaunchedEffect(artistName) {
@@ -230,62 +257,6 @@ fun ArtistsScreen(
                     item { Spacer(modifier = Modifier.height(100.dp)) }
                     item { Spacer(modifier = Modifier.height(100.dp)) }
                     item { Spacer(modifier = Modifier.height(100.dp)) }
-                }
-                
-                // A-Z Alphabetical Scroll Bar
-                var barHeight by remember { mutableStateOf(0f) }
-                var currentDragLetter by remember { mutableStateOf<String?>(null) }
-                val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                
-                if (currentDragLetter != null) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = 40.dp)
-                            .size(60.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = currentDragLetter!!, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 4.dp)
-                        .onSizeChanged { barHeight = it.height.toFloat() }
-                        .pointerInput(Unit) {
-                            detectVerticalDragGestures(
-                                onDragEnd = { currentDragLetter = null },
-                                onDragCancel = { currentDragLetter = null }
-                            ) { change, _ ->
-                                val y = change.position.y
-                                if (barHeight > 0) {
-                                    val index = ((y / barHeight) * alphabet.length).toInt().coerceIn(0, alphabet.length - 1)
-                                    val targetLetter = alphabet[index].toString()
-                                    currentDragLetter = targetLetter
-                                    val targetIndex = artistGroups.keys.indexOfFirst { it.uppercase().startsWith(targetLetter) }
-                                    if (targetIndex >= 0) {
-                                        coroutineScope.launch {
-                                            gridState.scrollToItem(targetIndex)
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    alphabet.forEach { letter ->
-                        Text(
-                            text = letter.toString(),
-                            fontSize = 10.sp,
-                            color = GlassTextMuted,
-                            modifier = Modifier.padding(vertical = 1.dp)
-                        )
-                    }
                 }
             }
             }

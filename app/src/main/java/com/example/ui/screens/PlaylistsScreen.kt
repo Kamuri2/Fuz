@@ -53,6 +53,7 @@ fun PlaylistsScreen(
     initialPlaylistName: String?,
     onCreatePlaylist: (String) -> Unit,
     onPlayPlaylist: (List<Track>, Int) -> Unit,
+    onDismissOverlay: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -99,14 +100,19 @@ fun PlaylistsScreen(
         }
     }
 
-    BackHandler(enabled = selectedPlaylistName != null || editPlaylistTarget != null || showAddSongsSheetForPlaylist != null) {
+    BackHandler(enabled = selectedPlaylistName != null || editPlaylistTarget != null || showAddSongsSheetForPlaylist != null || onDismissOverlay != null) {
         if (showAddSongsSheetForPlaylist != null) {
             showAddSongsSheetForPlaylist = null
         } else if (editPlaylistTarget != null) {
             editPlaylistTarget = null
+        } else if (selectedPlaylistName != null) {
+            if (onDismissOverlay != null) onDismissOverlay()
+            else {
+                selectedPlaylistName = null
+                selectedPlaylistId = null
+            }
         } else {
-            selectedPlaylistName = null
-            selectedPlaylistId = null
+            onDismissOverlay?.invoke()
         }
     }
 

@@ -33,7 +33,7 @@ fun UserProfileScreen(
     userProfile: UserEntity?,
     socialRepository: SocialRepository,
     onBack: () -> Unit,
-    onPlaylistClick: (Long) -> Unit
+    onPlaylistClick: (String) -> Unit
 ) {
     val playlists by socialRepository.getAllPlaylists().collectAsState(initial = emptyList())
     val topArtists by socialRepository.getTopArtistsToday().collectAsState(initial = emptyList())
@@ -41,7 +41,7 @@ fun UserProfileScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF121212))
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Gradient background at the top
         Box(
@@ -51,8 +51,8 @@ fun UserProfileScreen(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF8B4513).copy(alpha = 0.6f), // Warm rust color
-                            Color(0xFF121212)
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.background
                         )
                     )
                 )
@@ -67,7 +67,7 @@ fun UserProfileScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
                 }
             }
 
@@ -87,7 +87,7 @@ fun UserProfileScreen(
                             modifier = Modifier
                                 .size(120.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.1f)),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             if (userProfile?.profileImageUri != null) {
@@ -100,7 +100,7 @@ fun UserProfileScreen(
                             } else {
                                 Text(
                                     text = userProfile?.name?.take(1)?.uppercase() ?: "U",
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 48.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -110,14 +110,14 @@ fun UserProfileScreen(
                         Column {
                             Text(
                                 text = userProfile?.name ?: "Unknown",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = 32.sp,
                                 fontWeight = FontWeight.Black
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "0 followers • 0 following",
-                                color = GlassTextMuted,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 14.sp
                             )
                         }
@@ -131,23 +131,21 @@ fun UserProfileScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Playlists", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        // Simple placeholder manage button or text
-                        Text("Manage", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text("Playlists", color = MaterialTheme.colorScheme.onBackground, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
                 
                 if (playlists.isEmpty()) {
                     item {
-                        Text("No playlists yet.", color = GlassTextMuted, modifier = Modifier.padding(bottom = 16.dp))
+                        Text("No playlists yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 16.dp))
                     }
                 } else {
-                    items(playlists.take(5)) { playlist ->
+                    items(playlists) { playlist ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onPlaylistClick(playlist.playlistId) }
+                                .clickable { onPlaylistClick(playlist.name) }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -155,39 +153,33 @@ fun UserProfileScreen(
                                 modifier = Modifier
                                     .size(64.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF222222)),
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(32.dp))
+                                if (playlist.imageUri != null) {
+                                    AsyncImage(
+                                        model = Uri.parse(playlist.imageUri),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(Icons.Default.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(32.dp))
+                                }
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = playlist.name,
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Normal
                                 )
                                 Text(
-                                    text = "0 saves",
-                                    color = GlassTextMuted,
+                                    text = playlist.description?.ifEmpty { "0 saves" } ?: "0 saves",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 14.sp
                                 )
-                            }
-                        }
-                    }
-                    item {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Button(
-                                onClick = { },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                                shape = RoundedCornerShape(20.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha=0.3f))
-                            ) {
-                                Text("See all playlists", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -196,7 +188,7 @@ fun UserProfileScreen(
                 // Top Artists Today
                 if (topArtists.isNotEmpty()) {
                     item {
-                        Text("Recently played artists", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text("Recently played artists", color = MaterialTheme.colorScheme.onBackground, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(16.dp))
                     }
                     items(topArtists) { artist ->
@@ -210,20 +202,29 @@ fun UserProfileScreen(
                                 modifier = Modifier
                                     .size(56.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF333333)),
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = artist.artist.take(1).uppercase(),
-                                    color = Color.White,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                if (artist.imageUri != null) {
+                                    AsyncImage(
+                                        model = Uri.parse(artist.imageUri),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Text(
+                                        text = artist.artist.take(1).uppercase(),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Text(
                                 text = artist.artist,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.weight(1f)

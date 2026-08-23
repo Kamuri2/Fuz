@@ -89,16 +89,24 @@ fun AlbumsScreen(
     tracks: List<Track>,
     initialAlbumName: String? = null,
     onPlayAlbum: (List<Track>, Int) -> Unit,
+    onDismissOverlay: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val albumGroups = remember(tracks) {
-        tracks.groupBy { it.album }
+        tracks.groupBy { it.album }.toSortedMap(compareBy { it.lowercase() })
     }
     
     var selectedAlbum by remember { mutableStateOf<String?>(initialAlbumName) }
+    var searchQuery by remember { mutableStateOf("") }
+    
     LaunchedEffect(initialAlbumName) { if(initialAlbumName != null) selectedAlbum = initialAlbumName }
-    BackHandler(enabled = selectedAlbum != null) {
-        selectedAlbum = null
+    BackHandler(enabled = selectedAlbum != null || onDismissOverlay != null) {
+        if (selectedAlbum != null) {
+            if (onDismissOverlay != null) onDismissOverlay()
+            else selectedAlbum = null
+        } else {
+            onDismissOverlay?.invoke()
+        }
     }
 
     if (selectedAlbum != null) {
@@ -111,7 +119,10 @@ fun AlbumsScreen(
         AlbumDetailScreen(
             albumName = selectedAlbum!!,
             tracks = albumTracks,
-            onBack = { selectedAlbum = null },
+            onBack = { 
+                if (onDismissOverlay != null) onDismissOverlay()
+                else selectedAlbum = null 
+            },
             onPlayTrack = { index -> onPlayAlbum(albumTracks, index) },
             onShuffleAll = { onPlayAlbum(albumTracks.shuffled(), 0) }
         )
@@ -129,15 +140,32 @@ fun AlbumsScreen(
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(vertical = 12.dp)
             )
+            
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Buscar álbum...", color = Color.Gray) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary
+                )
+            )
 
-            if (albumGroups.isEmpty()) {
+            val filteredAlbums = remember(albumGroups, searchQuery) {
+                if (searchQuery.isBlank()) albumGroups.keys.toList()
+                else albumGroups.keys.filter { it.contains(searchQuery, ignoreCase = true) }
+            }
+
+            if (filteredAlbums.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(com.example.ui.Translations.get(settings.appLanguage, "no_albums"), color = GlassTextMuted)
+                    Text(if (albumGroups.isEmpty()) com.example.ui.Translations.get(settings.appLanguage, "no_albums") else "No hay resultados", color = GlassTextMuted)
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
                 val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
-                val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(2),
@@ -145,7 +173,7 @@ fun AlbumsScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(albumGroups.keys.toList()) { albumName ->
+                    items(filteredAlbums) { albumName ->
                         val albumTracks = albumGroups[albumName] ?: emptyList()
                         val firstTrack = albumTracks.firstOrNull()
 
@@ -183,63 +211,6 @@ fun AlbumsScreen(
                     }
                     item { Spacer(modifier = Modifier.height(100.dp)) }
                     item { Spacer(modifier = Modifier.height(100.dp)) }
-                    item { Spacer(modifier = Modifier.height(100.dp)) }
-                }
-                
-                // A-Z Alphabetical Scroll Bar
-                var barHeight by remember { mutableStateOf(0f) }
-                var currentDragLetter by remember { mutableStateOf<String?>(null) }
-                val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                
-                if (currentDragLetter != null) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = 40.dp)
-                            .size(60.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = currentDragLetter!!, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 4.dp)
-                        .onSizeChanged { barHeight = it.height.toFloat() }
-                        .pointerInput(Unit) {
-                            detectVerticalDragGestures(
-                                onDragEnd = { currentDragLetter = null },
-                                onDragCancel = { currentDragLetter = null }
-                            ) { change, _ ->
-                                val y = change.position.y
-                                if (barHeight > 0) {
-                                    val index = ((y / barHeight) * alphabet.length).toInt().coerceIn(0, alphabet.length - 1)
-                                    val targetLetter = alphabet[index].toString()
-                                    currentDragLetter = targetLetter
-                                    val targetIndex = albumGroups.keys.indexOfFirst { it.uppercase().startsWith(targetLetter) }
-                                    if (targetIndex >= 0) {
-                                        coroutineScope.launch {
-                                            gridState.scrollToItem(targetIndex)
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    alphabet.forEach { letter ->
-                        Text(
-                            text = letter.toString(),
-                            fontSize = 10.sp,
-                            color = GlassTextMuted,
-                            modifier = Modifier.padding(vertical = 1.dp)
-                        )
-                    }
                 }
             }
             }

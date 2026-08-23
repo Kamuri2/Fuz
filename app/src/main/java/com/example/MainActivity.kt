@@ -382,15 +382,15 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         onRequestPermissions = { permissionLauncher.launch(requiredPermissions) },
                         onNavigateToPlaylist = { name -> 
                             initialPlaylist = name
-                            currentScreen = NavigationScreen.PLAYLISTS
+                            // Do not change currentScreen
                         },
                         onNavigateToAlbum = { name -> 
                             initialAlbum = name
-                            currentScreen = NavigationScreen.ALBUMS
+                            // Do not change currentScreen
                         },
                         onNavigateToArtist = { name -> 
                             initialArtist = name
-                            currentScreen = NavigationScreen.ARTISTS
+                            // Do not change currentScreen
                         }
                     )
 
@@ -447,15 +447,52 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         userProfile = userProfile,
                         socialRepository = socialRepository,
                         onBack = { currentScreen = NavigationScreen.HOME },
-                        onPlaylistClick = { playlistId -> 
-                            // We need to pass the name. Wait, the old PlaylistsScreen uses Name.
-                            // The user wants PlaylistsScreen to show it.
-                            initialPlaylist = "Playlist" // We'll fix this later
-                            currentScreen = NavigationScreen.PLAYLISTS
+                        onPlaylistClick = { playlistName -> 
+                            initialPlaylist = playlistName
+                            // Do not change currentScreen
                         }
                     )
     
                     else -> {}
+                }
+                
+                if (initialPlaylist != null && currentScreen != NavigationScreen.PLAYLISTS) {
+                    PlaylistsScreen(
+                        settings = appSettings,
+                        socialRepository = socialRepository,
+                        favorites = favorites,
+                        allTracks = loadedTracks,
+                        initialPlaylistName = initialPlaylist,
+                        onCreatePlaylist = {},
+                        onPlayPlaylist = { tracks, idx -> playerManager.setQueue(tracks, idx) },
+                        onDismissOverlay = { initialPlaylist = null },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                
+                if (initialAlbum != null && currentScreen != NavigationScreen.ALBUMS) {
+                    AlbumsScreen(
+                        settings = appSettings,
+                        tracks = loadedTracks,
+                        initialAlbumName = initialAlbum,
+                        onPlayAlbum = { albumTracks, idx -> 
+                            playerManager.setShuffle(false)
+                            playerManager.setQueue(albumTracks, idx)
+                        },
+                        onDismissOverlay = { initialAlbum = null },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                if (initialArtist != null && currentScreen != NavigationScreen.ARTISTS) {
+                    ArtistsScreen(
+                        settings = appSettings,
+                        tracks = loadedTracks,
+                        initialArtistName = initialArtist,
+                        onPlayArtist = { artistTracks, idx -> playerManager.setQueue(artistTracks, idx) },
+                        onDismissOverlay = { initialArtist = null },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }
