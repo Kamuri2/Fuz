@@ -171,8 +171,8 @@ object ArtworkExtractor {
             }
             if (inputStream == null) return null
 
-            // Read the first 4MB (Opus tags with high-res art can be 1-3MB in header)
-            val buffer = ByteArray(4 * 1024 * 1024)
+            // Read the first 10MB to ensure we don't truncate high-res Opus cover arts
+            val buffer = ByteArray(10 * 1024 * 1024)
             var totalRead = 0
             while (totalRead < buffer.size) {
                 val read = inputStream.read(buffer, totalRead, buffer.size - totalRead)
@@ -189,7 +189,23 @@ object ArtworkExtractor {
             val metaIndex = indexOfPattern(buffer, totalRead, metaPattern)
             if (metaIndex != -1) {
                 val start = metaIndex + metaPattern.size
-                val base64Str = extractBase64String(buffer, start, totalRead)
+                
+                // Try to read Vorbis length prefix if available
+                var length = -1
+                if (metaIndex >= 4) {
+                    val b0 = buffer[metaIndex - 4].toInt() and 0xFF
+                    val b1 = buffer[metaIndex - 3].toInt() and 0xFF
+                    val b2 = buffer[metaIndex - 2].toInt() and 0xFF
+                    val b3 = buffer[metaIndex - 1].toInt() and 0xFF
+                    length = b0 or (b1 shl 8) or (b2 shl 16) or (b3 shl 24)
+                }
+                
+                val base64Str = if (length > metaPattern.size && metaIndex - 4 + 4 + length <= totalRead) {
+                    String(buffer, start, length - metaPattern.size, Charsets.US_ASCII)
+                } else {
+                    extractBase64String(buffer, start, totalRead)
+                }
+                
                 if (base64Str.isNotBlank()) {
                     val decoded = decodeVorbisPictureBlock(base64Str)
                     if (decoded != null && decoded.isNotEmpty()) {
@@ -242,19 +258,19 @@ object ArtworkExtractor {
         var end = start
         while (end < limit) {
             val b = data[end]
-            // Valid Base64 chars are A-Z, a-z, 0-9, +, /, =, and whitespace (CR/LF)
+            // Valid Base64 chars are A-Z, a-z, 0-9, +, /, =, and whitespace (CR/LF/Space)
             val isValidBase64 = (b >= 'A'.code.toByte() && b <= 'Z'.code.toByte()) ||
                     (b >= 'a'.code.toByte() && b <= 'z'.code.toByte()) ||
                     (b >= '0'.code.toByte() && b <= '9'.code.toByte()) ||
                     b == '+'.code.toByte() || b == '/'.code.toByte() || b == '='.code.toByte() ||
-                    b == '\r'.code.toByte() || b == '\n'.code.toByte()
+                    b == '\r'.code.toByte() || b == '\n'.code.toByte() || b == ' '.code.toByte()
             if (!isValidBase64) {
                 break
             }
             end++
         }
         if (end <= start) return ""
-        return String(data, start, end - start, Charsets.US_ASCII).replace("\r", "").replace("\n", "").trim()
+        return String(data, start, end - start, Charsets.US_ASCII).replace("\r", "").replace("\n", "").replace(" ", "").trim()
     }
 
     private fun decodeVorbisPictureBlock(base64Str: String): ByteArray? {
@@ -273,53 +289,23 @@ object ArtworkExtractor {
             buffer.order(ByteOrder.BIG_ENDIAN)
             val picType = buffer.int
             val mimeLen = buffer.int
-            if (mimeLen < 0 || mimeLen > buffer.remaining()) return findImageMagicBytes(blockBytes)
+            if (mimeLen < 0 || mimeLen > buffer.remaining()) return null
             buffer.position(buffer.position() + mimeLen) // skip mime
             val descLen = buffer.int
-            if (descLen < 0 || descLen > buffer.remaining()) return findImageMagicBytes(blockBytes)
+            if (descLen < 0 || descLen > buffer.remaining()) return null
             buffer.position(buffer.position() + descLen) // skip desc
-            if (buffer.remaining() < 16 + 4) return findImageMagicBytes(blockBytes)
+            if (buffer.remaining() < 16 + 4) return null
             buffer.position(buffer.position() + 16) // skip width(4), height(4), depth(4), colors(4)
             val picDataLen = buffer.int
             if (picDataLen <= 0 || picDataLen > buffer.remaining()) {
-                val remaining = buffer.remaining()
-                if (remaining > 0) {
-                    val data = ByteArray(remaining)
-                    buffer.get(data)
-                    return data
-                }
-                return findImageMagicBytes(blockBytes)
+                return null // Avoid returning truncated array that causes broken images
             }
             val picData = ByteArray(picDataLen)
             buffer.get(picData)
             return picData
         } catch (e: Exception) {
-            return findImageMagicBytes(blockBytes)
+            return null
         }
-    }
-
-    private fun findImageMagicBytes(bytes: ByteArray): ByteArray? {
-        // Look for JPEG magic (0xFF, 0xD8, 0xFF)
-        for (i in 0 until bytes.size - 3) {
-            if (bytes[i] == 0xFF.toByte() && bytes[i + 1] == 0xD8.toByte() && bytes[i + 2] == 0xFF.toByte()) {
-                return bytes.copyOfRange(i, bytes.size)
-            }
-        }
-        // Look for PNG magic (0x89, 'P', 'N', 'G')
-        for (i in 0 until bytes.size - 4) {
-            if (bytes[i] == 0x89.toByte() && bytes[i + 1] == 0x50.toByte() && bytes[i + 2] == 0x4E.toByte() && bytes[i + 3] == 0x47.toByte()) {
-                return bytes.copyOfRange(i, bytes.size)
-            }
-        }
-        // Look for WEBP magic (RIFF .... WEBP)
-        for (i in 0 until bytes.size - 12) {
-            if (bytes[i] == 'R'.code.toByte() && bytes[i + 1] == 'I'.code.toByte() && bytes[i + 2] == 'F'.code.toByte() && bytes[i + 3] == 'F'.code.toByte() &&
-                bytes[i + 8] == 'W'.code.toByte() && bytes[i + 9] == 'E'.code.toByte() && bytes[i + 10] == 'B'.code.toByte() && bytes[i + 11] == 'P'.code.toByte()
-            ) {
-                return bytes.copyOfRange(i, bytes.size)
-            }
-        }
-        return null
     }
 
     fun decodeSampledBitmapFromByteArray(data: ByteArray, targetDim: Int): Bitmap? {
