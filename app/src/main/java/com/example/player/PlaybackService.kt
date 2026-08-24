@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
+import com.example.data.ArtworkExtractor
 import com.example.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -79,64 +80,19 @@ class PlaybackService : Service() {
 
         if (lastTrackForImage != track.id) {
             lastTrackForImage = track.id
-            lastLoadedBitmap = null
-            
-            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                var albumArtBitmap: android.graphics.Bitmap? = null
-                try {
-                    var rawBytes: ByteArray? = null
-                    if (track.path.isNotBlank()) {
-                        try {
-                            val file = java.io.File(track.path)
-                            if (file.exists() && file.canRead()) {
-                                val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
-                                rawBytes = audioFile.tag?.firstArtwork?.binaryData
+            // Check cache synchronously first
+            val cached = ArtworkExtractor.getCachedBitmap(track)
+            lastLoadedBitmap = cached
+
+            if (cached == null) {
+                scope.launch(Dispatchers.IO) {
+                    val albumArtBitmap = ArtworkExtractor.loadArtworkBitmap(applicationContext, track, targetDim = 512)
+                    if (albumArtBitmap != null) {
+                        lastLoadedBitmap = albumArtBitmap
+                        scope.launch(Dispatchers.Main) {
+                            if (lastTrackForImage == track.id) {
+                                updateNotificationAndSession() // trigger rebuild with image
                             }
-                        } catch (e: Exception) {}
-                    }
-                    
-                    if (rawBytes != null && rawBytes.isNotEmpty()) {
-                        val options = BitmapFactory.Options().apply {
-                            inSampleSize = 2
-                            inPreferredConfig = Bitmap.Config.ARGB_8888
-                        }
-                        albumArtBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
-                    }
-                } catch (e: Exception) {}
-                
-                if (albumArtBitmap == null && track.albumArtUri != null) {
-                    try {
-                        val pfd = contentResolver.openFileDescriptor(track.albumArtUri, "r")
-                        if (pfd != null) {
-                            val fd = pfd.fileDescriptor
-                            val boundsOptions = BitmapFactory.Options().apply {
-                                inJustDecodeBounds = true
-                            }
-                            BitmapFactory.decodeFileDescriptor(fd, null, boundsOptions)
-                            var sampleSize = 1
-                            val targetDim = 300
-                            if (boundsOptions.outHeight > targetDim || boundsOptions.outWidth > targetDim) {
-                                val halfHeight = boundsOptions.outHeight / 2
-                                val halfWidth = boundsOptions.outWidth / 2
-                                while (halfHeight / sampleSize >= targetDim && halfWidth / sampleSize >= targetDim) {
-                                    sampleSize *= 2
-                                }
-                            }
-                            val decodeOptions = BitmapFactory.Options().apply {
-                                inSampleSize = sampleSize
-                                inPreferredConfig = Bitmap.Config.ARGB_8888
-                            }
-                            albumArtBitmap = BitmapFactory.decodeFileDescriptor(fd, null, decodeOptions)
-                            pfd.close()
-                        }
-                    } catch (e: Exception) {}
-                }
-                
-                if (albumArtBitmap != null) {
-                    lastLoadedBitmap = albumArtBitmap
-                    scope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                        if (lastTrackForImage == track.id) {
-                            updateNotificationAndSession() // trigger rebuild with image
                         }
                     }
                 }
@@ -145,6 +101,7 @@ class PlaybackService : Service() {
         
         if (lastLoadedBitmap != null) {
             metadataBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, lastLoadedBitmap)
+            metadataBuilder.putBitmap(MediaMetadata.METADATA_KEY_ART, lastLoadedBitmap)
         }
         mediaSession.setMetadata(metadataBuilder.build())
 

@@ -1,0 +1,351 @@
+package com.example.data
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.util.Base64
+import android.util.Log
+import android.util.LruCache
+import com.example.model.Track
+import java.io.File
+import java.io.InputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
+object ArtworkExtractor {
+
+    private const val TAG = "ArtworkExtractor"
+
+    private val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
+    private val cacheSize = maxMemory / 6
+    val cache = object : LruCache<String, Bitmap>(cacheSize) {
+        override fun sizeOf(key: String, bitmap: Bitmap): Int {
+            return bitmap.byteCount / 1024
+        }
+    }
+
+    private fun getCacheKey(track: Track): String {
+        return if (track.path.isNotBlank()) track.path else track.contentUri.toString()
+    }
+
+    fun getCachedBitmap(track: Track): Bitmap? {
+        val key = getCacheKey(track)
+        if (key.isBlank()) return null
+        return cache.get(key)
+    }
+
+    fun loadArtworkBitmap(context: Context, track: Track, targetDim: Int = 600): Bitmap? {
+        val key = getCacheKey(track)
+        if (key.isNotBlank()) {
+            cache.get(key)?.let { return it }
+        }
+
+        val rawBytes = extractArtworkBytes(context, track) ?: return null
+        val bitmap = decodeSampledBitmapFromByteArray(rawBytes, targetDim)
+        if (bitmap != null && key.isNotBlank()) {
+            cache.put(key, bitmap)
+        }
+        return bitmap
+    }
+
+    fun extractArtworkBytes(context: Context, track: Track): ByteArray? {
+        // 1. Try JAudioTagger
+        if (track.path.isNotBlank()) {
+            try {
+                val file = File(track.path)
+                if (file.exists() && file.canRead()) {
+                    val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+                    val tag = audioFile.tag
+                    if (tag != null) {
+                        tag.firstArtwork?.binaryData?.takeIf { it.isNotEmpty() }?.let {
+                            return it
+                        }
+                        
+                        // Check vorbis comments directly if available via JAudioTagger
+                        val picBase64 = tag.getFirst("METADATA_BLOCK_PICTURE")
+                        if (!picBase64.isNullOrBlank()) {
+                            val decoded = decodeVorbisPictureBlock(picBase64)
+                            if (decoded != null && decoded.isNotEmpty()) {
+                                return decoded
+                            }
+                        }
+                        val coverBase64 = tag.getFirst("COVERART") ?: tag.getFirst("COVER_ART")
+                        if (!coverBase64.isNullOrBlank()) {
+                            try {
+                                val bytes = Base64.decode(coverBase64.trim(), Base64.DEFAULT)
+                                if (bytes.isNotEmpty()) return bytes
+                            } catch (e: Exception) {}
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "JAudioTagger failed for artwork: ${e.message}")
+            }
+        }
+
+        // 2. Specialized direct extractor for Opus, OGG, and Vorbis comments (handles .opus files)
+        val directOpusBytes = extractFromVorbisOrOpus(context, track)
+        if (directOpusBytes != null && directOpusBytes.isNotEmpty()) {
+            return directOpusBytes
+        }
+
+        // 3. MediaMetadataRetriever
+        try {
+            val mmr = MediaMetadataRetriever()
+            if (track.contentUri != Uri.EMPTY) {
+                mmr.setDataSource(context, track.contentUri)
+            } else if (track.path.isNotBlank()) {
+                mmr.setDataSource(track.path)
+            }
+            val embedded = mmr.embeddedPicture
+            mmr.release()
+            if (embedded != null && embedded.isNotEmpty()) {
+                return embedded
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "MediaMetadataRetriever failed for artwork: ${e.message}")
+        }
+
+        // 4. MediaStore album art URI
+        if (track.albumArtUri != null) {
+            try {
+                val pfd = context.contentResolver.openFileDescriptor(track.albumArtUri, "r")
+                if (pfd != null) {
+                    val stream = java.io.FileInputStream(pfd.fileDescriptor)
+                    val bytes = stream.readBytes()
+                    stream.close()
+                    pfd.close()
+                    if (bytes.isNotEmpty()) {
+                        return bytes
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+
+        // 5. Check sidecar cover images in folder
+        if (track.path.isNotBlank()) {
+            try {
+                val audioFile = File(track.path)
+                val parent = audioFile.parentFile
+                if (parent != null && parent.exists() && parent.isDirectory) {
+                    val candidateNames = listOf(
+                        "cover.jpg", "cover.png", "cover.webp", "cover.jpeg",
+                        "folder.jpg", "folder.png", "folder.webp", "folder.jpeg",
+                        "album.jpg", "album.png", "album.jpeg",
+                        "${audioFile.nameWithoutExtension}.jpg",
+                        "${audioFile.nameWithoutExtension}.png"
+                    )
+                    for (name in candidateNames) {
+                        val sidecar = File(parent, name)
+                        if (sidecar.exists() && sidecar.canRead()) {
+                            val bytes = sidecar.readBytes()
+                            if (bytes.isNotEmpty()) {
+                                return bytes
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+
+        return null
+    }
+
+    /**
+     * Reads Opus or Ogg Vorbis comments directly from file or ContentResolver stream.
+     * Scans for METADATA_BLOCK_PICTURE or COVERART base64 data.
+     */
+    private fun extractFromVorbisOrOpus(context: Context, track: Track): ByteArray? {
+        var inputStream: InputStream? = null
+        try {
+            if (track.path.isNotBlank()) {
+                val f = File(track.path)
+                if (f.exists() && f.canRead()) {
+                    inputStream = f.inputStream()
+                }
+            }
+            if (inputStream == null && track.contentUri != Uri.EMPTY) {
+                inputStream = context.contentResolver.openInputStream(track.contentUri)
+            }
+            if (inputStream == null) return null
+
+            // Read the first 4MB (Opus tags with high-res art can be 1-3MB in header)
+            val buffer = ByteArray(4 * 1024 * 1024)
+            var totalRead = 0
+            while (totalRead < buffer.size) {
+                val read = inputStream.read(buffer, totalRead, buffer.size - totalRead)
+                if (read <= 0) break
+                totalRead += read
+            }
+
+            if (totalRead <= 0) return null
+
+            // Search for METADATA_BLOCK_PICTURE= or COVERART= in buffer
+            val metaPattern = "METADATA_BLOCK_PICTURE=".toByteArray(Charsets.US_ASCII)
+            val coverPattern = "COVERART=".toByteArray(Charsets.US_ASCII)
+
+            val metaIndex = indexOfPattern(buffer, totalRead, metaPattern)
+            if (metaIndex != -1) {
+                val start = metaIndex + metaPattern.size
+                val base64Str = extractBase64String(buffer, start, totalRead)
+                if (base64Str.isNotBlank()) {
+                    val decoded = decodeVorbisPictureBlock(base64Str)
+                    if (decoded != null && decoded.isNotEmpty()) {
+                        return decoded
+                    }
+                }
+            }
+
+            val coverIndex = indexOfPattern(buffer, totalRead, coverPattern)
+            if (coverIndex != -1) {
+                val start = coverIndex + coverPattern.size
+                val base64Str = extractBase64String(buffer, start, totalRead)
+                if (base64Str.isNotBlank()) {
+                    try {
+                        val decoded = Base64.decode(base64Str, Base64.DEFAULT)
+                        if (decoded.isNotEmpty()) {
+                            return decoded
+                        }
+                    } catch (e: Exception) {}
+                }
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "extractFromVorbisOrOpus error: ${e.message}")
+        } finally {
+            try { inputStream?.close() } catch (e: Exception) {}
+        }
+        return null
+    }
+
+    private fun indexOfPattern(data: ByteArray, limit: Int, pattern: ByteArray): Int {
+        if (pattern.isEmpty() || limit < pattern.size) return -1
+        val max = limit - pattern.size
+        for (i in 0..max) {
+            var found = true
+            for (j in pattern.indices) {
+                // Case insensitive for ASCII letters
+                val b1 = data[i + j].toInt().toChar().uppercaseChar().code.toByte()
+                val b2 = pattern[j].toInt().toChar().uppercaseChar().code.toByte()
+                if (b1 != b2) {
+                    found = false
+                    break
+                }
+            }
+            if (found) return i
+        }
+        return -1
+    }
+
+    private fun extractBase64String(data: ByteArray, start: Int, limit: Int): String {
+        var end = start
+        while (end < limit) {
+            val b = data[end]
+            // Valid Base64 chars are A-Z, a-z, 0-9, +, /, =, and whitespace (CR/LF)
+            val isValidBase64 = (b >= 'A'.code.toByte() && b <= 'Z'.code.toByte()) ||
+                    (b >= 'a'.code.toByte() && b <= 'z'.code.toByte()) ||
+                    (b >= '0'.code.toByte() && b <= '9'.code.toByte()) ||
+                    b == '+'.code.toByte() || b == '/'.code.toByte() || b == '='.code.toByte() ||
+                    b == '\r'.code.toByte() || b == '\n'.code.toByte()
+            if (!isValidBase64) {
+                break
+            }
+            end++
+        }
+        if (end <= start) return ""
+        return String(data, start, end - start, Charsets.US_ASCII).replace("\r", "").replace("\n", "").trim()
+    }
+
+    private fun decodeVorbisPictureBlock(base64Str: String): ByteArray? {
+        return try {
+            val blockBytes = Base64.decode(base64Str.trim(), Base64.DEFAULT)
+            parseFlacPictureBlock(blockBytes)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun parseFlacPictureBlock(blockBytes: ByteArray): ByteArray? {
+        try {
+            if (blockBytes.size < 32) return null
+            val buffer = ByteBuffer.wrap(blockBytes)
+            buffer.order(ByteOrder.BIG_ENDIAN)
+            val picType = buffer.int
+            val mimeLen = buffer.int
+            if (mimeLen < 0 || mimeLen > buffer.remaining()) return findImageMagicBytes(blockBytes)
+            buffer.position(buffer.position() + mimeLen) // skip mime
+            val descLen = buffer.int
+            if (descLen < 0 || descLen > buffer.remaining()) return findImageMagicBytes(blockBytes)
+            buffer.position(buffer.position() + descLen) // skip desc
+            if (buffer.remaining() < 16 + 4) return findImageMagicBytes(blockBytes)
+            buffer.position(buffer.position() + 16) // skip width(4), height(4), depth(4), colors(4)
+            val picDataLen = buffer.int
+            if (picDataLen <= 0 || picDataLen > buffer.remaining()) {
+                val remaining = buffer.remaining()
+                if (remaining > 0) {
+                    val data = ByteArray(remaining)
+                    buffer.get(data)
+                    return data
+                }
+                return findImageMagicBytes(blockBytes)
+            }
+            val picData = ByteArray(picDataLen)
+            buffer.get(picData)
+            return picData
+        } catch (e: Exception) {
+            return findImageMagicBytes(blockBytes)
+        }
+    }
+
+    private fun findImageMagicBytes(bytes: ByteArray): ByteArray? {
+        // Look for JPEG magic (0xFF, 0xD8, 0xFF)
+        for (i in 0 until bytes.size - 3) {
+            if (bytes[i] == 0xFF.toByte() && bytes[i + 1] == 0xD8.toByte() && bytes[i + 2] == 0xFF.toByte()) {
+                return bytes.copyOfRange(i, bytes.size)
+            }
+        }
+        // Look for PNG magic (0x89, 'P', 'N', 'G')
+        for (i in 0 until bytes.size - 4) {
+            if (bytes[i] == 0x89.toByte() && bytes[i + 1] == 0x50.toByte() && bytes[i + 2] == 0x4E.toByte() && bytes[i + 3] == 0x47.toByte()) {
+                return bytes.copyOfRange(i, bytes.size)
+            }
+        }
+        // Look for WEBP magic (RIFF .... WEBP)
+        for (i in 0 until bytes.size - 12) {
+            if (bytes[i] == 'R'.code.toByte() && bytes[i + 1] == 'I'.code.toByte() && bytes[i + 2] == 'F'.code.toByte() && bytes[i + 3] == 'F'.code.toByte() &&
+                bytes[i + 8] == 'W'.code.toByte() && bytes[i + 9] == 'E'.code.toByte() && bytes[i + 10] == 'B'.code.toByte() && bytes[i + 11] == 'P'.code.toByte()
+            ) {
+                return bytes.copyOfRange(i, bytes.size)
+            }
+        }
+        return null
+    }
+
+    fun decodeSampledBitmapFromByteArray(data: ByteArray, targetDim: Int): Bitmap? {
+        try {
+            val boundsOptions = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeByteArray(data, 0, data.size, boundsOptions)
+
+            var sampleSize = 1
+            if (boundsOptions.outHeight > targetDim || boundsOptions.outWidth > targetDim) {
+                val halfHeight = boundsOptions.outHeight / 2
+                val halfWidth = boundsOptions.outWidth / 2
+                while (halfHeight / sampleSize >= targetDim && halfWidth / sampleSize >= targetDim) {
+                    sampleSize *= 2
+                }
+            }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            return BitmapFactory.decodeByteArray(data, 0, data.size, decodeOptions)
+        } catch (e: Exception) {
+            Log.d(TAG, "decodeSampledBitmap error: ${e.message}")
+            return null
+        }
+    }
+}

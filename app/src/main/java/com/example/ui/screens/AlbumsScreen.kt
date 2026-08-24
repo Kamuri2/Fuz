@@ -133,13 +133,25 @@ fun AlbumsScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
-            Text(
-                text = com.example.ui.Translations.get(settings.appLanguage, "albums"),
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(vertical = 12.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (onDismissOverlay != null) {
+                    IconButton(onClick = onDismissOverlay) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                Text(
+                    text = com.example.ui.Translations.get(settings.appLanguage, "albums"),
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
             
             OutlinedTextField(
                 value = searchQuery,

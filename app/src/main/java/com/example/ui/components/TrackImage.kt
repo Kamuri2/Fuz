@@ -24,14 +24,10 @@ import com.example.model.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import com.example.data.ArtworkExtractor
+
 object ArtworkCache {
-    private val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
-    private val cacheSize = maxMemory / 6
-    val cache = object : LruCache<String, Bitmap>(cacheSize) {
-        override fun sizeOf(key: String, bitmap: Bitmap): Int {
-            return bitmap.byteCount / 1024
-        }
-    }
+    val cache = ArtworkExtractor.cache
 }
 
 @Composable
@@ -41,67 +37,18 @@ fun TrackImage(
     contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
-    var bitmap by remember(track.id) { mutableStateOf<Bitmap?>(ArtworkCache.cache.get(track.path)) }
+    var bitmap by remember(track.id) { mutableStateOf<Bitmap?>(ArtworkExtractor.getCachedBitmap(track)) }
     var useFallback by remember(track.id) { mutableStateOf(false) }
 
-        LaunchedEffect(track.id) {
+    LaunchedEffect(track.id) {
         if (bitmap == null && !useFallback) {
             withContext(Dispatchers.IO) {
-                try {
-                    var rawBytes: ByteArray? = null
-                    
-                    if (track.path.isNotBlank()) {
-                        try {
-                            val file = java.io.File(track.path)
-                            if (file.exists() && file.canRead()) {
-                                val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
-                                rawBytes = audioFile.tag?.firstArtwork?.binaryData
-                            }
-                        } catch (e: Exception) {
-                            Log.d("TrackImage", "JAudioTagger failed for artwork: ${e.message}")
-                        }
-                    }
-                    
-                    if (rawBytes == null || rawBytes.isEmpty()) {
-                        try {
-                            val mmr = MediaMetadataRetriever()
-                            mmr.setDataSource(context, track.contentUri)
-                            rawBytes = mmr.embeddedPicture
-                            mmr.release()
-                        } catch (e: Exception) {}
-                    }
-                    
-                    if (rawBytes != null && rawBytes.isNotEmpty()) {
-                        val boundsOptions = BitmapFactory.Options().apply {
-                            inJustDecodeBounds = true
-                        }
-                        BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, boundsOptions)
-                        
-                        var sampleSize = 1
-                        val targetDim = 600
-                        if (boundsOptions.outHeight > targetDim || boundsOptions.outWidth > targetDim) {
-                            val halfHeight = boundsOptions.outHeight / 2
-                            val halfWidth = boundsOptions.outWidth / 2
-                            while (halfHeight / sampleSize >= targetDim && halfWidth / sampleSize >= targetDim) {
-                                sampleSize *= 2
-                            }
-                        }
-                        
-                        val decodeOptions = BitmapFactory.Options().apply {
-                            inSampleSize = sampleSize
-                            inPreferredConfig = Bitmap.Config.ARGB_8888
-                        }
-                        
-                        val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOptions)
-                        if (decoded != null) {
-                            ArtworkCache.cache.put(track.path, decoded)
-                            bitmap = decoded
-                            return@withContext
-                        }
-                    }
-                } catch (e: Exception) {}
-                
-                useFallback = true
+                val decoded = ArtworkExtractor.loadArtworkBitmap(context, track, targetDim = 600)
+                if (decoded != null) {
+                    bitmap = decoded
+                } else {
+                    useFallback = true
+                }
             }
         }
     }

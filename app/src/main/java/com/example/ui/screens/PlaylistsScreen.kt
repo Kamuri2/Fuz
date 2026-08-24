@@ -406,8 +406,12 @@ fun PlaylistsScreen(
             creatorImageUri = userProfile?.profileImageUri,
             tracks = tracks,
             onBack = {
-                selectedPlaylistName = null
-                selectedPlaylistId = null
+                if (onDismissOverlay != null) {
+                    onDismissOverlay()
+                } else {
+                    selectedPlaylistName = null
+                    selectedPlaylistId = null
+                }
             },
             onPlayTrack = { idx -> onPlayPlaylist(tracks, idx) },
             onShuffleAll = { onPlayPlaylist(tracks.shuffled(), 0) },
@@ -440,34 +444,47 @@ fun PlaylistsScreen(
         )
     } else {
         // MAIN PLAYLISTS LIST SCREEN
-        Column(
+        Box(
             modifier = modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = com.example.ui.Translations.get(settings.appLanguage, "playlists"),
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Button(
-                    onClick = { showCreateDialog = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(16.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.Black)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(com.example.ui.Translations.get(settings.appLanguage, "create"), color = Color.Black, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (onDismissOverlay != null) {
+                            IconButton(onClick = onDismissOverlay) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        Text(
+                            text = com.example.ui.Translations.get(settings.appLanguage, "playlists"),
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    Button(
+                        onClick = { showCreateDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(com.example.ui.Translations.get(settings.appLanguage, "create"), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                    }
                 }
-            }
 
             if (showCreateDialog) {
                 Card(
@@ -679,6 +696,7 @@ fun PlaylistsScreen(
                 item { Spacer(modifier = Modifier.height(100.dp)) }
             }
         }
+        }
     }
 }
 
@@ -737,13 +755,14 @@ fun SpotifyStylePlaylistDetail(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
                         topGradientColor,
-                        topGradientColor.copy(alpha = 0.6f),
-                        Color(0xFF121212),
-                        Color(0xFF121212)
+                        topGradientColor,
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.background
                     ),
                     startY = 0f,
                     endY = 1200f
