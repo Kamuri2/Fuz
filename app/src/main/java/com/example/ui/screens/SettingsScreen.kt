@@ -64,7 +64,6 @@ fun SettingsScreen(
     settings: AppSettings,
     onUpdateSettings: (AppSettings) -> Unit,
     onBack: () -> Unit,
-    onPickFolderUri: () -> Unit,
     onRescanAudio: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -468,37 +467,18 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("Current folder:", fontSize = 13.sp, color = GlassTextMuted)
-                Text("Songs / Storage Access Framework", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Button(
-                        onClick = onPickFolderUri,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0x1AFFFFFF)),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Elegir Carpeta", color = Color.White, fontSize = 12.sp)
-                    }
 
                     Button(
                         onClick = onRescanAudio,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0x1AFFFFFF)),
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = Color.White)
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Re-Escanear", color = Color.White, fontSize = 12.sp)
                     }
-                }
             }
         }
 

@@ -95,21 +95,9 @@ fun HomeScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Selecciona una carpeta local o concede permisos de almacenamiento para explorar tus archivos de audio.",
-                    color = GlassTextMuted,
-                    fontSize = 14.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    text = "Concede permisos de almacenamiento para explorar tus archivos de audio.",
+                    color = GlassTextMuted
                 )
-                Spacer(modifier = Modifier.height(24.dp))
-                Button(
-                    onClick = onPickFolder,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.fillMaxWidth(0.85f)
-                ) {
-                    Text("Seleccionar Carpeta", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
-                }
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = onRequestPermissions,

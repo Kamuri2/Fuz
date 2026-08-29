@@ -167,7 +167,11 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
     }
 
     if (needsSetup) {
-        SetupScreen(onComplete = { needsSetup = false })
+        SetupScreen(
+            currentLanguage = appSettings.appLanguage,
+            onLanguageChange = { playerManager.setAppLanguage(it) },
+            onComplete = { needsSetup = false }
+        )
         return@LiquidMusicTheme
     }
 
@@ -439,7 +443,6 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         settings = appSettings,
                         onUpdateSettings = { playerManager.updateSettings(it) },
                         onBack = { currentScreen = NavigationScreen.HOME },
-                        onPickFolderUri = { folderPickerLauncher.launch(null) },
                         onRescanAudio = { isForceRescan = true; permissionLauncher.launch(requiredPermissions) }
                     )
                     

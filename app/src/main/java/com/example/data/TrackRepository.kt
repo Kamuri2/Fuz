@@ -75,6 +75,12 @@ object TrackRepository {
                                 try {
                                     val cached = existing[track.id]
                                     var enriched = MetadataReader.extractFullMetadata(context, track)
+                                    // Cache the thumbnail
+                                    val thumbUri = ArtworkExtractor.saveArtworkToInternalCache(context, enriched)
+                                    if (thumbUri != null) {
+                                        enriched = enriched.copy(albumArtUri = thumbUri)
+                                    }
+                                    
                                     // If cached had lyrics, preserve it if extractor didn't find new ones
                                     if (enriched.lyrics.isBlank() && cached != null && cached.lyrics.isNotBlank()) {
                                         enriched = enriched.copy(lyrics = cached.lyrics)

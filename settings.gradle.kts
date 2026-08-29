@@ -31,6 +31,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Fuzion Player"
+rootProject.name = "Music Player"
 
 include(":app")

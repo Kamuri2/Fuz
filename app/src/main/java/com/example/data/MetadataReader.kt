@@ -244,62 +244,16 @@ object MetadataReader {
         
         return cleaned
     }
-}
-
-
-    private fun parseSyltToLrc(lyricsBytes: ByteArray): String {
-        try {
-            val builder = java.lang.StringBuilder()
-            var offset = 0
-            while (offset < lyricsBytes.size) {
-                // Find end of text string (null terminated)
-                var textEnd = offset
-                while (textEnd < lyricsBytes.size && lyricsBytes[textEnd].toInt() != 0) {
-                    textEnd++
-                }
-                if (textEnd >= lyricsBytes.size) break
-                
-                val text = String(lyricsBytes, offset, textEnd - offset, Charsets.UTF_8).trim()
-                
-                // Timestamp is 4 bytes integer after the null terminator
-                offset = textEnd + 1
-                if (offset + 3 < lyricsBytes.size) {
-                    val t1 = lyricsBytes[offset].toInt() and 0xFF
-                    val t2 = lyricsBytes[offset + 1].toInt() and 0xFF
-                    val t3 = lyricsBytes[offset + 2].toInt() and 0xFF
-                    val t4 = lyricsBytes[offset + 3].toInt() and 0xFF
-                    val timestampMs = (t1 shl 24) or (t2 shl 16) or (t3 shl 8) or t4
-                    
-                    val minutes = timestampMs / 60000
-                    val seconds = (timestampMs % 60000) / 1000
-                    val hundreths = (timestampMs % 1000) / 10
-                    
-                    val timeStr = String.format("[%02d:%02d.%02d]", minutes, seconds, hundreths)
-                    if (text.isNotBlank()) {
-                        builder.append(timeStr).append(text).append("\n")
-                    }
-                    offset += 4
-                } else {
-                    break
-                }
-            }
-            return builder.toString().trim()
-        } catch (e: Exception) {
-            return ""
-        }
-    }
 
 
     private fun convertSubtitleToLrc(content: String): String {
         if (content.contains(Regex("(\\[|<)\\d{1,3}:\\d{1,2}"))) {
             return content
         }
-        
         val builder = StringBuilder()
         val lines = content.lines()
         val timeRegex = Regex("(?:\\d{2}:)?(\\d{2}):(\\d{2})[,.](\\d{2,3})\\s*-->.*")
         var currentTimestamp = ""
-        
         for (line in lines) {
             val match = timeRegex.find(line)
             if (match != null) {
@@ -315,10 +269,9 @@ object MetadataReader {
                 }
             }
         }
-        
         if (builder.isNotEmpty()) {
             return builder.toString().trim()
         }
-        
         return content
     }
+}

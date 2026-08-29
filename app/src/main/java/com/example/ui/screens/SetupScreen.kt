@@ -24,12 +24,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.UserRepository
+import com.example.ui.Translations
 import com.example.ui.components.LiquidGlassBackground
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SetupScreen(onComplete: () -> Unit) {
+fun SetupScreen(
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit,
+    onComplete: () -> Unit
+) {
     val context = LocalContext.current
     val userRepository = remember { UserRepository.getInstance(context) }
     val scope = rememberCoroutineScope()
@@ -43,6 +48,9 @@ fun SetupScreen(onComplete: () -> Unit) {
         uri?.let { imageUri = it }
     }
 
+    val availableLanguages = listOf("English", "Spanish", "French", "German", "Italian", "Portuguese", "Japanese")
+    var showLanguageMenu by remember { mutableStateOf(false) }
+
     LiquidGlassBackground(isPlaying = false) {
         Column(
             modifier = Modifier
@@ -51,15 +59,38 @@ fun SetupScreen(onComplete: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // Language Selector at the top
+            Box(modifier = Modifier.align(Alignment.End)) {
+                TextButton(onClick = { showLanguageMenu = true }) {
+                    Text(text = currentLanguage, color = Color.White)
+                }
+                DropdownMenu(
+                    expanded = showLanguageMenu,
+                    onDismissRequest = { showLanguageMenu = false }
+                ) {
+                    availableLanguages.forEach { lang ->
+                        DropdownMenuItem(
+                            text = { Text(lang) },
+                            onClick = {
+                                onLanguageChange(lang)
+                                showLanguageMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
             Text(
-                text = "Welcome to Liquid Music",
+                text = Translations.get(currentLanguage, "welcome_music_player"),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Let's set up your profile",
+                text = Translations.get(currentLanguage, "setup_profile_subtitle"),
                 fontSize = 16.sp,
                 color = Color.White.copy(alpha = 0.7f)
             )
@@ -98,7 +129,7 @@ fun SetupScreen(onComplete: () -> Unit) {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Your Name", color = Color.White.copy(alpha = 0.7f)) },
+                label = { Text(Translations.get(currentLanguage, "your_name_label"), color = Color.White.copy(alpha = 0.7f)) },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
@@ -128,8 +159,10 @@ fun SetupScreen(onComplete: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Continue", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(Translations.get(currentLanguage, "continue_button"), fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
+            
+            Spacer(modifier = Modifier.weight(1.5f))
         }
     }
 }

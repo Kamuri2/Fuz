@@ -2,7 +2,11 @@ package com.example.ui
 
 object Translations {
     val en = mapOf(
-                "albums" to "Albums",
+        "welcome_music_player" to "Welcome to Music Player",
+        "setup_profile_subtitle" to "Let's set up your profile",
+        "your_name_label" to "Your Name",
+        "continue_button" to "Continue",
+        "albums" to "Albums",
         "artists" to "Artists", "album" to "ALBUM", "appearance_themes" to "Appearance & Themes", "dark_mode" to "Dark Mode", "app_language" to "App Language", "crossfade_duration" to "Crossfade",
         "playlists" to "Playlists",
         "settings" to "Settings",
@@ -30,9 +34,13 @@ object Translations {
     )
 
     val es = mapOf(
+        "welcome_music_player" to "Bienvenido a Music Player",
+        "setup_profile_subtitle" to "Vamos a configurar tu perfil",
+        "your_name_label" to "Tu Nombre",
+        "continue_button" to "Continuar",
         "home" to "Inicio",
         "albums" to "Álbumes",
-        "artists" to "Artistas", "album" to "ÁLBUM", "appearance_themes" to "Aparência e Temas", "dark_mode" to "Modo Escuro", "app_language" to "Idioma do App", "crossfade_duration" to "Transição (Crossfade)", "album" to "ÁLBUM", "appearance_themes" to "Apariencia y Temas", "dark_mode" to "Modo Oscuro", "app_language" to "Idioma de la App", "crossfade_duration" to "Transición (Crossfade)",
+        "artists" to "Artistas", "album" to "ÁLBUM", "appearance_themes" to "Apariencia y Temas", "dark_mode" to "Modo Oscuro", "app_language" to "Idioma de la App", "crossfade_duration" to "Transición (Crossfade)",
         "playlists" to "Listas de Reproducción",
         "settings" to "Configuración",
         "all_tracks" to "Todas las Canciones",
@@ -59,7 +67,11 @@ object Translations {
     )
 
     val fr = mapOf(
-                "albums" to "Albums",
+        "welcome_music_player" to "Bienvenue sur Music Player",
+        "setup_profile_subtitle" to "Configurons votre profil",
+        "your_name_label" to "Votre Nom",
+        "continue_button" to "Continuer",
+        "albums" to "Albums",
         "artists" to "Artistes", "album" to "ALBUM", "appearance_themes" to "Apparence et Thèmes", "dark_mode" to "Mode Sombre", "app_language" to "Langue de l'App", "crossfade_duration" to "Fondu enchaîné",
         "playlists" to "Listes de lecture",
         "settings" to "Paramètres",
@@ -83,6 +95,10 @@ object Translations {
     )
 
     val de = mapOf(
+        "welcome_music_player" to "Willkommen bei Music Player",
+        "setup_profile_subtitle" to "Lassen Sie uns Ihr Profil einrichten",
+        "your_name_label" to "Ihr Name",
+        "continue_button" to "Weiter",
         "home" to "Start",
         "albums" to "Alben",
         "artists" to "Künstler", "album" to "ALBUM", "appearance_themes" to "Aussehen & Themes", "dark_mode" to "Dunkelmodus", "app_language" to "App-Sprache", "crossfade_duration" to "Überblendung",
@@ -108,6 +124,10 @@ object Translations {
     )
     
     val it = mapOf(
+        "welcome_music_player" to "Benvenuto su Music Player",
+        "setup_profile_subtitle" to "Impostiamo il tuo profilo",
+        "your_name_label" to "Il Tuo Nome",
+        "continue_button" to "Continua",
         "albums" to "Album",
         "artists" to "Artisti", "album" to "ALBUM", "appearance_themes" to "Aspetto e Temi", "dark_mode" to "Modalità Scura", "app_language" to "Lingua App", "crossfade_duration" to "Dissolvenza incrociata",
         "playlists" to "Playlist",
@@ -131,8 +151,11 @@ object Translations {
         "songs" to "brani"
     )
 
-
     val ja = mapOf(
+        "welcome_music_player" to "Music Playerへようこそ",
+        "setup_profile_subtitle" to "プロフィールを設定しましょう",
+        "your_name_label" to "お名前",
+        "continue_button" to "次へ",
         "home" to "ホーム",
         "albums" to "アルバム",
         "artists" to "アーティスト",
@@ -161,9 +184,13 @@ object Translations {
         "app_language" to "アプリの言語", "crossfade_duration" to "クロスフェード"
     )
     val pt = mapOf(
+        "welcome_music_player" to "Bem-vindo ao Music Player",
+        "setup_profile_subtitle" to "Vamos configurar seu perfil",
+        "your_name_label" to "Seu Nome",
+        "continue_button" to "Continuar",
         "home" to "Início",
         "albums" to "Álbuns",
-        "artists" to "Artistas", "album" to "ÁLBUM", "appearance_themes" to "Aparência e Temas", "dark_mode" to "Modo Escuro", "app_language" to "Idioma do App", "crossfade_duration" to "Transição (Crossfade)", "album" to "ÁLBUM", "appearance_themes" to "Apariencia y Temas", "dark_mode" to "Modo Oscuro", "app_language" to "Idioma de la App", "crossfade_duration" to "Transición (Crossfade)",
+        "artists" to "Artistas", "album" to "ÁLBUM", "appearance_themes" to "Aparência e Temas", "dark_mode" to "Modo Escuro", "app_language" to "Idioma do App", "crossfade_duration" to "Transição (Crossfade)",
         "playlists" to "Listas",
         "settings" to "Configurações",
         "all_tracks" to "Todas as Faixas",

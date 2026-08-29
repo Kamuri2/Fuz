@@ -93,6 +93,7 @@ dependencies {
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)
+  implementation("androidx.compose.ui:ui-text-google-fonts:1.6.0")
   implementation(libs.androidx.core.ktx)
   implementation("androidx.core:core-splashscreen:1.0.1")
   implementation("androidx.documentfile:documentfile:1.0.1")

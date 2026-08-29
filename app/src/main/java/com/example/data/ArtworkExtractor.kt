@@ -10,6 +10,7 @@ import android.util.Log
 import android.util.LruCache
 import com.example.model.Track
 import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -28,6 +29,26 @@ object ArtworkExtractor {
 
     private fun getCacheKey(track: Track): String {
         return if (track.path.isNotBlank()) track.path else track.contentUri.toString()
+    }
+
+    fun saveArtworkToInternalCache(context: Context, track: Track): Uri? {
+        try {
+            val bytes = extractArtworkBytes(context, track) ?: return null
+            val bitmap = decodeSampledBitmapFromByteArray(bytes, 400) ?: return null
+            
+            val cacheDir = File(context.cacheDir, "thumbnails")
+            if (!cacheDir.exists()) cacheDir.mkdirs()
+            
+            val file = File(cacheDir, "thumb_${track.id}.jpg")
+            val fos = FileOutputStream(file)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, fos)
+            fos.close()
+            
+            return Uri.fromFile(file)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save artwork to cache: ${e.message}")
+            return null
+        }
     }
 
     fun getCachedBitmap(track: Track): Bitmap? {
