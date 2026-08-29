@@ -58,6 +58,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -240,76 +241,49 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val isGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions[Manifest.permission.READ_MEDIA_AUDIO] == true
-        } else {
-            permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true
-        }
-        if (isGranted) {
-            // Also attempt to get deep file manager permission on newer devices for absolute path access
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !android.os.Environment.isExternalStorageManager()) {
-                try {
-                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.data = android.net.Uri.parse("package:" + context.packageName)
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                    context.startActivity(intent)
-                }
-            }
-            
-            coroutineScope.launch(Dispatchers.IO) {
-                val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
-                if (deviceTracks.isNotEmpty()) {
-                    val saved = com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks, isForceRescan)
-                    isForceRescan = false
-                    kotlinx.coroutines.withContext(Dispatchers.Main) {
-                        loadedTracks = saved
-                        if (playerManager.playlist.value.isEmpty()) {
-                            playerManager.setQueue(saved, 0, false)
-                        }
+    val performScan: (Boolean) -> Unit = { force ->
+        coroutineScope.launch(Dispatchers.IO) {
+            val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
+            if (deviceTracks.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    loadedTracks = deviceTracks
+                    if (playerManager.playlist.value.isEmpty()) {
+                        playerManager.setQueue(deviceTracks, 0, false)
                     }
+                }
+                val saved = com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks, force)
+                withContext(Dispatchers.Main) {
+                    loadedTracks = saved
                 }
             }
         }
     }
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val isGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions[Manifest.permission.READ_MEDIA_AUDIO] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
+        } else {
+            permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+        if (isGranted) {
+            performScan(isForceRescan)
+            isForceRescan = false
+        }
+    }
+
     // Initial Scanner Load
     LaunchedEffect(Unit) {
-        val hasPermission = requiredPermissions.all { perm ->
-            ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
+        val hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         }
         if (hasPermission) {
-            // Also attempt to request deep access at startup if not granted
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !android.os.Environment.isExternalStorageManager()) {
-                try {
-                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.data = android.net.Uri.parse("package:" + context.packageName)
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                    context.startActivity(intent)
-                }
-            }
-
-            // Check if we already have cached tracks, if so, we can optionally scan in background and merge,
-            // but for now let's just do it in IO to prevent ANR.
-            kotlinx.coroutines.withContext(Dispatchers.IO) {
-                val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
-                if (deviceTracks.isNotEmpty()) {
-                    val saved = com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks, isForceRescan)
-                    isForceRescan = false
-                    kotlinx.coroutines.withContext(Dispatchers.Main) {
-                        loadedTracks = saved
-                        if (playerManager.playlist.value.isEmpty()) {
-                            playerManager.setQueue(saved, 0, false)
-                        }
-                    }
-                }
-            }
+            performScan(false)
         } else {
             permissionLauncher.launch(requiredPermissions)
         }

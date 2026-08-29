@@ -2,12 +2,18 @@ package com.example.ui
 
 object Translations {
     val en = mapOf(
-        "welcome_music_player" to "Welcome to Music Player",
+        "welcome_music_player" to "Welcome to Fuzion Player",
         "setup_profile_subtitle" to "Let's set up your profile",
         "your_name_label" to "Your Name",
         "continue_button" to "Continue",
+        "home" to "Home",
         "albums" to "Albums",
-        "artists" to "Artists", "album" to "ALBUM", "appearance_themes" to "Appearance & Themes", "dark_mode" to "Dark Mode", "app_language" to "App Language", "crossfade_duration" to "Crossfade",
+        "artists" to "Artists",
+        "album" to "ALBUM",
+        "appearance_themes" to "Appearance & Themes",
+        "dark_mode" to "Dark Mode",
+        "app_language" to "App Language",
+        "crossfade_duration" to "Crossfade",
         "playlists" to "Playlists",
         "settings" to "Settings",
         "all_tracks" to "All Tracks",
@@ -34,13 +40,18 @@ object Translations {
     )
 
     val es = mapOf(
-        "welcome_music_player" to "Bienvenido a Music Player",
+        "welcome_music_player" to "Bienvenido a Fuzion Player",
         "setup_profile_subtitle" to "Vamos a configurar tu perfil",
         "your_name_label" to "Tu Nombre",
         "continue_button" to "Continuar",
         "home" to "Inicio",
         "albums" to "Álbumes",
-        "artists" to "Artistas", "album" to "ÁLBUM", "appearance_themes" to "Apariencia y Temas", "dark_mode" to "Modo Oscuro", "app_language" to "Idioma de la App", "crossfade_duration" to "Transición (Crossfade)",
+        "artists" to "Artistas",
+        "album" to "ÁLBUM",
+        "appearance_themes" to "Apariencia y Temas",
+        "dark_mode" to "Modo Oscuro",
+        "app_language" to "Idioma de la App",
+        "crossfade_duration" to "Transición (Crossfade)",
         "playlists" to "Listas de Reproducción",
         "settings" to "Configuración",
         "all_tracks" to "Todas las Canciones",
@@ -67,12 +78,18 @@ object Translations {
     )
 
     val fr = mapOf(
-        "welcome_music_player" to "Bienvenue sur Music Player",
+        "welcome_music_player" to "Bienvenue sur Fuzion Player",
         "setup_profile_subtitle" to "Configurons votre profil",
         "your_name_label" to "Votre Nom",
         "continue_button" to "Continuer",
+        "home" to "Accueil",
         "albums" to "Albums",
-        "artists" to "Artistes", "album" to "ALBUM", "appearance_themes" to "Apparence et Thèmes", "dark_mode" to "Mode Sombre", "app_language" to "Langue de l'App", "crossfade_duration" to "Fondu enchaîné",
+        "artists" to "Artistes",
+        "album" to "ALBUM",
+        "appearance_themes" to "Apparence et Thèmes",
+        "dark_mode" to "Mode Sombre",
+        "app_language" to "Langue de l'App",
+        "crossfade_duration" to "Fondu enchaîné",
         "playlists" to "Listes de lecture",
         "settings" to "Paramètres",
         "all_tracks" to "Tous les titres",
@@ -95,13 +112,18 @@ object Translations {
     )
 
     val de = mapOf(
-        "welcome_music_player" to "Willkommen bei Music Player",
+        "welcome_music_player" to "Willkommen bei Fuzion Player",
         "setup_profile_subtitle" to "Lassen Sie uns Ihr Profil einrichten",
         "your_name_label" to "Ihr Name",
         "continue_button" to "Weiter",
         "home" to "Start",
         "albums" to "Alben",
-        "artists" to "Künstler", "album" to "ALBUM", "appearance_themes" to "Aussehen & Themes", "dark_mode" to "Dunkelmodus", "app_language" to "App-Sprache", "crossfade_duration" to "Überblendung",
+        "artists" to "Künstler",
+        "album" to "ALBUM",
+        "appearance_themes" to "Aussehen & Themes",
+        "dark_mode" to "Dunkelmodus",
+        "app_language" to "App-Sprache",
+        "crossfade_duration" to "Überblendung",
         "playlists" to "Wiedergabelisten",
         "settings" to "Einstellungen",
         "all_tracks" to "Alle Titel",
@@ -124,12 +146,18 @@ object Translations {
     )
     
     val it = mapOf(
-        "welcome_music_player" to "Benvenuto su Music Player",
+        "welcome_music_player" to "Benvenuto su Fuzion Player",
         "setup_profile_subtitle" to "Impostiamo il tuo profilo",
         "your_name_label" to "Il Tuo Nome",
         "continue_button" to "Continua",
+        "home" to "Home",
         "albums" to "Album",
-        "artists" to "Artisti", "album" to "ALBUM", "appearance_themes" to "Aspetto e Temi", "dark_mode" to "Modalità Scura", "app_language" to "Lingua App", "crossfade_duration" to "Dissolvenza incrociata",
+        "artists" to "Artisti",
+        "album" to "ALBUM",
+        "appearance_themes" to "Aspetto e Temi",
+        "dark_mode" to "Modalità Scura",
+        "app_language" to "Lingua App",
+        "crossfade_duration" to "Dissolvenza incrociata",
         "playlists" to "Playlist",
         "settings" to "Impostazioni",
         "all_tracks" to "Tutti i brani",
@@ -152,7 +180,7 @@ object Translations {
     )
 
     val ja = mapOf(
-        "welcome_music_player" to "Music Playerへようこそ",
+        "welcome_music_player" to "Fuzion Playerへようこそ",
         "setup_profile_subtitle" to "プロフィールを設定しましょう",
         "your_name_label" to "お名前",
         "continue_button" to "次へ",
@@ -181,16 +209,23 @@ object Translations {
         "album" to "アルバム",
         "appearance_themes" to "外観とテーマ",
         "dark_mode" to "ダークモード",
-        "app_language" to "アプリの言語", "crossfade_duration" to "クロスフェード"
+        "app_language" to "アプリの言語",
+        "crossfade_duration" to "クロスフェード"
     )
+
     val pt = mapOf(
-        "welcome_music_player" to "Bem-vindo ao Music Player",
+        "welcome_music_player" to "Bem-vindo ao Fuzion Player",
         "setup_profile_subtitle" to "Vamos configurar seu perfil",
         "your_name_label" to "Seu Nome",
         "continue_button" to "Continuar",
         "home" to "Início",
         "albums" to "Álbuns",
-        "artists" to "Artistas", "album" to "ÁLBUM", "appearance_themes" to "Aparência e Temas", "dark_mode" to "Modo Escuro", "app_language" to "Idioma do App", "crossfade_duration" to "Transição (Crossfade)",
+        "artists" to "Artistas",
+        "album" to "ÁLBUM",
+        "appearance_themes" to "Aparência e Temas",
+        "dark_mode" to "Modo Escuro",
+        "app_language" to "Idioma do App",
+        "crossfade_duration" to "Transição (Crossfade)",
         "playlists" to "Listas",
         "settings" to "Configurações",
         "all_tracks" to "Todas as Faixas",
