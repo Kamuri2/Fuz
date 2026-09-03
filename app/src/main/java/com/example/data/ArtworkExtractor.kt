@@ -112,24 +112,7 @@ object ArtworkExtractor {
             return directOpusBytes
         }
 
-        // 3. MediaMetadataRetriever
-        try {
-            val mmr = MediaMetadataRetriever()
-            if (track.contentUri != Uri.EMPTY) {
-                mmr.setDataSource(context, track.contentUri)
-            } else if (track.path.isNotBlank()) {
-                mmr.setDataSource(track.path)
-            }
-            val embedded = mmr.embeddedPicture
-            mmr.release()
-            if (embedded != null && embedded.isNotEmpty()) {
-                return embedded
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "MediaMetadataRetriever failed for artwork: ${e.message}")
-        }
-
-        // 4. MediaStore album art URI
+        // 3. MediaStore album art URI
         if (track.albumArtUri != null) {
             try {
                 val pfd = context.contentResolver.openFileDescriptor(track.albumArtUri, "r")
