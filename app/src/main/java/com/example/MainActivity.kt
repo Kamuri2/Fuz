@@ -158,6 +158,12 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         isCheckingUser = false
     }
 
+    LaunchedEffect(currentScreen) {
+        initialPlaylist = null
+        initialAlbum = null
+        initialArtist = null
+    }
+
     // Clear old history on start
     LaunchedEffect(Unit) {
         socialRepository.clearOldHistory()
