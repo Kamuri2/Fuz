@@ -73,7 +73,9 @@ import androidx.compose.ui.unit.dp
 
 import androidx.compose.ui.unit.sp
 
-import coil.compose.AsyncImage
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import kotlinx.coroutines.delay
 import com.example.ui.components.TrackImage
 
 import com.example.model.Track
@@ -171,60 +173,197 @@ fun AlbumsScreen(
                 else albumGroups.keys.filter { it.contains(searchQuery, ignoreCase = true) }
             }
 
+            val coroutineScope = rememberCoroutineScope()
+            val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+            val alphabet = remember { listOf("#") + ('A'..'Z').map { it.toString() } }
+
+            val letterIndices = remember(filteredAlbums) {
+                val map = mutableMapOf<String, Int>()
+                filteredAlbums.forEachIndexed { index, albumName ->
+                    val trimmed = albumName.trim()
+                    val firstChar = trimmed.firstOrNull()?.uppercaseChar()
+                    val letterKey = if (firstChar != null && firstChar in 'A'..'Z') firstChar.toString() else "#"
+                    if (!map.containsKey(letterKey)) {
+                        map[letterKey] = index
+                    }
+                }
+                map
+            }
+
+            var activeLetterBubble by remember { mutableStateOf<String?>(null) }
+
+            fun jumpToLetter(letter: String) {
+                activeLetterBubble = letter
+                val targetIndex = if (letter == "#") {
+                    letterIndices["#"] ?: 0
+                } else {
+                    letterIndices[letter] ?: run {
+                        val targetChar = letter.first()
+                        letterIndices.entries
+                            .filter { it.key != "#" && it.key.first() >= targetChar }
+                            .minByOrNull { it.key.first() }?.value ?: 0
+                    }
+                }
+                coroutineScope.launch {
+                    gridState.scrollToItem(targetIndex)
+                    delay(900)
+                    if (activeLetterBubble == letter) {
+                        activeLetterBubble = null
+                    }
+                }
+            }
+
+            // Horizontal Alphabet Quick-Jump Strip
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+            ) {
+                items(alphabet) { letter ->
+                    val hasAlbums = letterIndices.containsKey(letter)
+                    val isSelected = activeLetterBubble == letter
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    isSelected -> MaterialTheme.colorScheme.primary
+                                    hasAlbums -> Color.White.copy(alpha = 0.15f)
+                                    else -> Color.White.copy(alpha = 0.05f)
+                                }
+                            )
+                            .clickable { jumpToLetter(letter) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = letter,
+                            fontSize = 13.sp,
+                            fontWeight = if (hasAlbums) FontWeight.Bold else FontWeight.Normal,
+                            color = when {
+                                isSelected -> Color.Black
+                                hasAlbums -> Color.White
+                                else -> Color.White.copy(alpha = 0.35f)
+                            }
+                        )
+                    }
+                }
+            }
+
             if (filteredAlbums.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(if (albumGroups.isEmpty()) com.example.ui.Translations.get(settings.appLanguage, "no_albums") else "No hay resultados", color = GlassTextMuted)
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
-                val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Fixed(2),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(filteredAlbums) { albumName ->
-                        val albumTracks = albumGroups[albumName] ?: emptyList()
-                        val firstTrack = albumTracks.firstOrNull()
-
-                        val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
-                        Card(
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        LazyVerticalGrid(
+                            state = gridState,
+                            columns = GridCells.Fixed(2),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedAlbum = albumName },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                                .weight(1f)
+                                .fillMaxHeight()
                         ) {
-                            Column(modifier = Modifier.padding(4.dp)) {
-                                Box(
+                            items(filteredAlbums) { albumName ->
+                                val albumTracks = albumGroups[albumName] ?: emptyList()
+                                val firstTrack = albumTracks.firstOrNull()
+
+                                val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .aspectRatio(1f)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(Color(0xFF2B2B2B)),
-                                    contentAlignment = Alignment.Center
+                                        .clickable { selectedAlbum = albumName },
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                                 ) {
-                                    when {
-                                        artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                        firstTrack != null -> TrackImage(track = firstTrack, modifier = Modifier.fillMaxSize())
-                                        else -> Icon(imageVector = Icons.Default.Album, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
+                                    Column(modifier = Modifier.padding(4.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .aspectRatio(1f)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(Color(0xFF2B2B2B)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            when {
+                                                artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                                firstTrack != null -> TrackImage(track = firstTrack, modifier = Modifier.fillMaxSize())
+                                                else -> Icon(imageVector = Icons.Default.Album, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        Text(text = albumName, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(text = "${firstTrack?.artist ?: "Various"} • ${albumTracks.size} tracks", fontSize = 12.sp, color = GlassTextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
+                            }
+                            item { Spacer(modifier = Modifier.height(100.dp)) }
+                            item { Spacer(modifier = Modifier.height(100.dp)) }
+                        }
 
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                Text(text = albumName, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(text = "${firstTrack?.artist ?: "Various"} • ${albumTracks.size} tracks", fontSize = 12.sp, color = GlassTextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        // Vertical Alphabet Drag/Tap Scroller
+                        var stripHeight by remember { mutableFloatStateOf(1f) }
+                        Column(
+                            modifier = Modifier
+                                .width(20.dp)
+                                .fillMaxHeight()
+                                .padding(bottom = 90.dp)
+                                .onSizeChanged { stripHeight = it.height.toFloat() }
+                                .pointerInput(filteredAlbums, alphabet) {
+                                    detectVerticalDragGestures(
+                                        onDragStart = { offset ->
+                                            val percent = (offset.y / stripHeight).coerceIn(0f, 0.999f)
+                                            val letterIdx = (percent * alphabet.size).toInt().coerceIn(0, alphabet.lastIndex)
+                                            jumpToLetter(alphabet[letterIdx])
+                                        },
+                                        onVerticalDrag = { change, _ ->
+                                            val percent = (change.position.y / stripHeight).coerceIn(0f, 0.999f)
+                                            val letterIdx = (percent * alphabet.size).toInt().coerceIn(0, alphabet.lastIndex)
+                                            jumpToLetter(alphabet[letterIdx])
+                                        }
+                                    )
+                                },
+                            verticalArrangement = Arrangement.SpaceBetween,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            alphabet.forEach { letter ->
+                                val hasAlbums = letterIndices.containsKey(letter)
+                                Text(
+                                    text = letter,
+                                    fontSize = 9.sp,
+                                    fontWeight = if (hasAlbums) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (hasAlbums) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.25f),
+                                    modifier = Modifier.clickable { jumpToLetter(letter) }
+                                )
                             }
                         }
                     }
-                    item { Spacer(modifier = Modifier.height(100.dp)) }
-                    item { Spacer(modifier = Modifier.height(100.dp)) }
+
+                    // Floating Letter Bubble on Jump
+                    if (activeLetterBubble != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
+                                .align(Alignment.Center),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = activeLetterBubble!!,
+                                fontSize = 36.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.Black
+                            )
+                        }
+                    }
                 }
-            }
             }
         }
     }

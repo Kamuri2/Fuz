@@ -73,13 +73,39 @@ fun PlaylistsScreen(
     var editPlaylistTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
     var showAddSongsSheetForPlaylist by remember { mutableStateOf<Long?>(null) }
 
+    val playlistPrefs = remember { context.getSharedPreferences("playlist_custom_covers", Context.MODE_PRIVATE) }
+    var favoritesCoverUri by remember { mutableStateOf(playlistPrefs.getString("cover_favorites", null)) }
+    var allSongsCoverUri by remember { mutableStateOf(playlistPrefs.getString("cover_all_songs", null)) }
+    var pendingPhotoTarget by remember { mutableStateOf<String?>(null) }
+
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null && editPlaylistTarget != null) {
+        if (uri != null) {
             coroutineScope.launch {
                 val savedUriString = socialRepository.savePlaylistImage(context, uri) ?: uri.toString()
-                val updated = editPlaylistTarget!!.copy(imageUri = savedUriString)
-                socialRepository.updatePlaylist(updated)
-                editPlaylistTarget = updated
+                when (pendingPhotoTarget) {
+                    "favorites" -> {
+                        playlistPrefs.edit().putString("cover_favorites", savedUriString).apply()
+                        favoritesCoverUri = savedUriString
+                    }
+                    "all_songs" -> {
+                        playlistPrefs.edit().putString("cover_all_songs", savedUriString).apply()
+                        allSongsCoverUri = savedUriString
+                    }
+                    else -> {
+                        val pId = pendingPhotoTarget?.toLongOrNull() ?: editPlaylistTarget?.playlistId
+                        if (pId != null) {
+                            val currentTarget = playlists.find { it.playlistId == pId } ?: editPlaylistTarget
+                            if (currentTarget != null) {
+                                val updated = currentTarget.copy(imageUri = savedUriString)
+                                socialRepository.updatePlaylist(updated)
+                                if (editPlaylistTarget?.playlistId == pId) {
+                                    editPlaylistTarget = updated
+                                }
+                            }
+                        }
+                    }
+                }
+                pendingPhotoTarget = null
             }
         }
     }
@@ -399,7 +425,11 @@ fun PlaylistsScreen(
                 isAllSongs -> "Biblioteca completa de música"
                 else -> currentPlaylistEntity?.description ?: ""
             },
-            imageUri = currentPlaylistEntity?.imageUri,
+            imageUri = when {
+                isFavorites -> favoritesCoverUri
+                isAllSongs -> allSongsCoverUri
+                else -> currentPlaylistEntity?.imageUri
+            },
             isFavorites = isFavorites,
             isAllSongs = isAllSongs,
             creatorName = userProfile?.name ?: "Usuario",
@@ -415,9 +445,26 @@ fun PlaylistsScreen(
             },
             onPlayTrack = { idx -> onPlayPlaylist(tracks, idx) },
             onShuffleAll = { onPlayPlaylist(tracks.shuffled(), 0) },
+            onChangeCover = {
+                when {
+                    isFavorites -> {
+                        pendingPhotoTarget = "favorites"
+                        imagePicker.launch("image/*")
+                    }
+                    isAllSongs -> {
+                        pendingPhotoTarget = "all_songs"
+                        imagePicker.launch("image/*")
+                    }
+                    currentPlaylistEntity != null -> {
+                        pendingPhotoTarget = currentPlaylistEntity.playlistId.toString()
+                        imagePicker.launch("image/*")
+                    }
+                }
+            },
             onEdit = {
                 if (currentPlaylistEntity != null) {
                     editPlaylistTarget = currentPlaylistEntity
+                    pendingPhotoTarget = currentPlaylistEntity.playlistId.toString()
                 }
             },
             onAddSongs = {
@@ -573,27 +620,57 @@ fun PlaylistsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(20.dp),
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(54.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFE53935)),
+                                    .background(Color(0xFFE53935))
+                                    .clickable {
+                                        pendingPhotoTarget = "favorites"
+                                        imagePicker.launch("image/*")
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Favorite,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(28.dp)
-                                )
+                                if (favoritesCoverUri != null) {
+                                    AsyncImage(
+                                        model = Uri.parse(favoritesCoverUri),
+                                        contentDescription = "Cover",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(2.dp)
+                                            .size(18.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.7f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Favorite,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(com.example.ui.Translations.get(settings.appLanguage, "favorite_songs"), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 Text("${favoriteTracks.size} " + com.example.ui.Translations.get(settings.appLanguage, "songs_marked"), fontSize = 13.sp, color = GlassTextSecondary)
+                            }
+                            IconButton(onClick = {
+                                pendingPhotoTarget = "favorites"
+                                imagePicker.launch("image/*")
+                            }) {
+                                Icon(Icons.Default.PhotoCamera, contentDescription = "Cambiar foto", tint = Color.White.copy(alpha = 0.75f))
                             }
                             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = GlassTextSecondary)
                         }
@@ -614,27 +691,57 @@ fun PlaylistsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(20.dp),
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(54.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF1976D2)),
+                                    .background(Color(0xFF1976D2))
+                                    .clickable {
+                                        pendingPhotoTarget = "all_songs"
+                                        imagePicker.launch("image/*")
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.MusicNote,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(28.dp)
-                                )
+                                if (allSongsCoverUri != null) {
+                                    AsyncImage(
+                                        model = Uri.parse(allSongsCoverUri),
+                                        contentDescription = "Cover",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(2.dp)
+                                            .size(18.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.7f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("All Songs", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 Text("${allTracks.size} songs", fontSize = 13.sp, color = GlassTextSecondary)
+                            }
+                            IconButton(onClick = {
+                                pendingPhotoTarget = "all_songs"
+                                imagePicker.launch("image/*")
+                            }) {
+                                Icon(Icons.Default.PhotoCamera, contentDescription = "Cambiar foto", tint = Color.White.copy(alpha = 0.75f))
                             }
                             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = GlassTextSecondary)
                         }
@@ -666,7 +773,11 @@ fun PlaylistsScreen(
                             modifier = Modifier
                                 .size(64.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF222222)),
+                                .background(Color(0xFF222222))
+                                .clickable {
+                                    pendingPhotoTarget = playlist.playlistId.toString()
+                                    imagePicker.launch("image/*")
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             if (playlist.imageUri != null) {
@@ -679,6 +790,17 @@ fun PlaylistsScreen(
                             } else {
                                 Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
                             }
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(2.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.65f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                            }
                         }
 
                         Spacer(modifier = Modifier.width(16.dp))
@@ -688,7 +810,17 @@ fun PlaylistsScreen(
                             Text(text = descText, fontSize = 13.sp, color = GlassTextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
 
-                        IconButton(onClick = { editPlaylistTarget = playlist }) {
+                        IconButton(onClick = {
+                            pendingPhotoTarget = playlist.playlistId.toString()
+                            imagePicker.launch("image/*")
+                        }) {
+                            Icon(Icons.Default.PhotoCamera, contentDescription = "Cambiar portada", tint = GlassTextMuted)
+                        }
+
+                        IconButton(onClick = {
+                            editPlaylistTarget = playlist
+                            pendingPhotoTarget = playlist.playlistId.toString()
+                        }) {
                             Icon(Icons.Default.Edit, contentDescription = "Edit Playlist", tint = GlassTextMuted)
                         }
                     }
@@ -713,6 +845,7 @@ fun SpotifyStylePlaylistDetail(
     onBack: () -> Unit,
     onPlayTrack: (Int) -> Unit,
     onShuffleAll: () -> Unit,
+    onChangeCover: () -> Unit,
     onEdit: () -> Unit,
     onAddSongs: () -> Unit,
     onRemoveTrack: (Long) -> Unit,
@@ -817,7 +950,8 @@ fun SpotifyStylePlaylistDetail(
                             .size(240.dp)
                             .shadow(elevation = 16.dp, shape = RoundedCornerShape(12.dp))
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF1F1F1F)),
+                            .background(Color(0xFF1F1F1F))
+                            .clickable { onChangeCover() },
                         contentAlignment = Alignment.Center
                     ) {
                         when {
@@ -874,6 +1008,24 @@ fun SpotifyStylePlaylistDetail(
                                     )
                                 }
                             }
+                        }
+
+                        // Floating Camera Overlay Badge
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(10.dp)
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.7f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoCamera,
+                                contentDescription = "Cambiar foto",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }
@@ -959,6 +1111,15 @@ fun SpotifyStylePlaylistDetail(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            AssistChip(
+                                onClick = onChangeCover,
+                                label = { Text("Cambiar foto", color = Color.White, fontSize = 12.sp) },
+                                leadingIcon = {
+                                    Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                },
+                                colors = AssistChipDefaults.assistChipColors(containerColor = Color(0x33FFFFFF)),
+                                shape = RoundedCornerShape(20.dp)
+                            )
                             if (!isAllSongs && !isFavorites) {
                                 AssistChip(
                                     onClick = onAddSongs,

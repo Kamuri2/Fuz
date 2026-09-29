@@ -90,6 +90,7 @@ import com.example.model.Track
 import com.example.player.LoopMode
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.ArtistInfoTab
+import com.example.ui.components.ThinCircleSlider
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextSecondary
 import kotlinx.coroutines.Dispatchers
@@ -204,7 +205,7 @@ fun PlayerScreen(
                     // Artwork Cover
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.9f)
+                            .fillMaxWidth(0.81f)
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color(0x1AFFFFFF)),
@@ -407,14 +408,9 @@ fun PlayerScreen(
                                         color = GlassTextMuted
                                     )
                                 }
-                                Slider(
+                                ThinCircleSlider(
                                     value = if (durationMs > 0) currentPositionMs.toFloat() / durationMs.toFloat() else 0f,
                                     onValueChange = { fraction -> onSeek((fraction * durationMs).toLong()) },
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = Color.White,
-                                        activeTrackColor = Color.White,
-                                        inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                                    ),
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -606,7 +602,7 @@ fun PlayerScreen(
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.96f)
+                                        .fillMaxWidth(0.86f)
                                         .aspectRatio(1f)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(Color(0x1AFFFFFF))
@@ -846,14 +842,9 @@ fun PlayerScreen(
                         Text(text = formatDuration(durationMs), fontSize = 12.sp, color = GlassTextMuted)
                     }
 
-                    Slider(
+                    ThinCircleSlider(
                         value = if (durationMs > 0) currentPositionMs.toFloat() / durationMs.toFloat() else 0f,
                         onValueChange = { fraction -> onSeek((fraction * durationMs).toLong()) },
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = Color.White,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

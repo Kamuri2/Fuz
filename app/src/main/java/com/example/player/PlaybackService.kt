@@ -32,28 +32,9 @@ class PlaybackService : Service() {
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private val CHANNEL_ID = "fuzion_playback_channel"
 
-    private val screenReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == Intent.ACTION_SCREEN_OFF || intent?.action == Intent.ACTION_SCREEN_ON) {
-                if (playerManager.isPlaying.value) {
-                    val actIntent = Intent(this@PlaybackService, com.example.LockScreenPlayerActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    }
-                    startActivity(actIntent)
-                }
-            }
-        }
-    }
-
     override fun onCreate() {
         super.onCreate()
         playerManager = AudioPlayerManager.getInstance(applicationContext)
-
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_OFF)
-            addAction(Intent.ACTION_SCREEN_ON)
-        }
-        registerReceiver(screenReceiver, filter)
 
         mediaSession = MediaSession(this, "FuzionPlaybackService").apply {
             setCallback(object : MediaSession.Callback() {
@@ -202,7 +183,6 @@ class PlaybackService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(screenReceiver)
         mediaSession.release()
         playerManager.release()
     }

@@ -48,6 +48,7 @@ import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextSecondary
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.ui.text.style.TextOverflow
+import com.example.ui.components.TrackImage
 
 @Composable
 fun FoldersScreen(
@@ -110,6 +111,9 @@ fun FoldersScreen(
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(folderGroups.keys.toList()) { folderName ->
                         val folderTracks = folderGroups[folderName] ?: emptyList()
+                        val representativeTrack = remember(folderTracks) {
+                            folderTracks.firstOrNull { it.albumArtUri != null } ?: folderTracks.firstOrNull()
+                        }
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -120,22 +124,42 @@ fun FoldersScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp),
+                                    .padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(48.dp)
+                                        .size(56.dp)
                                         .clip(RoundedCornerShape(12.dp))
-                                        .background(Color(0x1AFFFFFF)),
+                                        .background(Color(0xFF222222)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Folder,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(28.dp)
-                                    )
+                                    if (representativeTrack != null) {
+                                        TrackImage(track = representativeTrack, modifier = Modifier.fillMaxSize())
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .padding(2.dp)
+                                                .size(18.dp)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Color.Black.copy(alpha = 0.75f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Folder,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Folder,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
                                 }
 
                                 Spacer(modifier = Modifier.width(16.dp))
@@ -145,13 +169,22 @@ fun FoldersScreen(
                                         text = folderName,
                                         fontSize = 17.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    val subText = if (representativeTrack != null && representativeTrack.artist.isNotBlank() && representativeTrack.artist != "Unknown Artist") {
+                                        "${folderTracks.size} audio • ${representativeTrack.artist}"
+                                    } else {
+                                        "${folderTracks.size} audio files"
+                                    }
                                     Text(
-                                        text = "${folderTracks.size} audio files",
+                                        text = subText,
                                         fontSize = 13.sp,
-                                        color = GlassTextSecondary
+                                        color = GlassTextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
 

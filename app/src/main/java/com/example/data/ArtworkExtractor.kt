@@ -27,13 +27,22 @@ object ArtworkExtractor {
         }
     }
 
+    private val negativeCache = java.util.Collections.synchronizedSet(HashSet<String>())
+
     private fun getCacheKey(track: Track): String {
         return if (track.path.isNotBlank()) track.path else track.contentUri.toString()
     }
 
     fun saveArtworkToInternalCache(context: Context, track: Track): Uri? {
         try {
-            val bytes = extractArtworkBytes(context, track) ?: return null
+            val key = getCacheKey(track)
+            if (key.isNotBlank() && negativeCache.contains(key)) return null
+
+            val bytes = extractArtworkBytes(context, track)
+            if (bytes == null) {
+                if (key.isNotBlank()) negativeCache.add(key)
+                return null
+            }
             val bitmap = decodeSampledBitmapFromByteArray(bytes, 400) ?: return null
             
             val cacheDir = File(context.cacheDir, "thumbnails")
@@ -46,33 +55,59 @@ object ArtworkExtractor {
             
             return Uri.fromFile(file)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to save artwork to cache: ${e.message}")
+            Log.d(TAG, "Failed to save artwork to cache: ${e.message}")
             return null
         }
     }
 
     fun getCachedBitmap(track: Track): Bitmap? {
         val key = getCacheKey(track)
-        if (key.isBlank()) return null
+        if (key.isBlank() || negativeCache.contains(key)) return null
         return cache.get(key)
     }
 
     fun loadArtworkBitmap(context: Context, track: Track, targetDim: Int = 600): Bitmap? {
         val key = getCacheKey(track)
         if (key.isNotBlank()) {
+            if (negativeCache.contains(key)) return null
             cache.get(key)?.let { return it }
         }
 
-        val rawBytes = extractArtworkBytes(context, track) ?: return null
+        val rawBytes = extractArtworkBytes(context, track)
+        if (rawBytes == null) {
+            if (key.isNotBlank()) {
+                negativeCache.add(key)
+            }
+            return null
+        }
+
         val bitmap = decodeSampledBitmapFromByteArray(rawBytes, targetDim)
         if (bitmap != null && key.isNotBlank()) {
             cache.put(key, bitmap)
+        } else if (key.isNotBlank()) {
+            negativeCache.add(key)
         }
         return bitmap
     }
 
     fun extractArtworkBytes(context: Context, track: Track): ByteArray? {
-        // 1. Try JAudioTagger
+        // 1. Try MediaStore album art URI first if available (pre-indexed, avoids reading entire audio file)
+        if (track.albumArtUri != null) {
+            try {
+                context.contentResolver.openInputStream(track.albumArtUri)?.use { stream ->
+                    val bytes = stream.readBytes()
+                    if (bytes.isNotEmpty()) {
+                        return bytes
+                    }
+                }
+            } catch (e: Exception) {
+                // MediaStore albumart entry not available on disk
+            }
+        }
+
+        var fileTagChecked = false
+
+        // 2. Try JAudioTagger (pure Java, handles MP3, FLAC, M4A, OGG, Opus, WAV without native MMR)
         if (track.path.isNotBlank()) {
             try {
                 val file = File(track.path)
@@ -80,6 +115,7 @@ object ArtworkExtractor {
                     val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
                     val tag = audioFile.tag
                     if (tag != null) {
+                        fileTagChecked = true
                         tag.firstArtwork?.binaryData?.takeIf { it.isNotEmpty() }?.let {
                             return it
                         }
@@ -106,46 +142,7 @@ object ArtworkExtractor {
             }
         }
 
-        // 2. Specialized direct extractor for Opus, OGG, and Vorbis comments (handles .opus files)
-        val directOpusBytes = extractFromVorbisOrOpus(context, track)
-        if (directOpusBytes != null && directOpusBytes.isNotEmpty()) {
-            return directOpusBytes
-        }
-
-        // 3. MediaMetadataRetriever
-        try {
-            val mmr = MediaMetadataRetriever()
-            if (track.contentUri != Uri.EMPTY) {
-                mmr.setDataSource(context, track.contentUri)
-            } else if (track.path.isNotBlank()) {
-                mmr.setDataSource(track.path)
-            }
-            val embedded = mmr.embeddedPicture
-            mmr.release()
-            if (embedded != null && embedded.isNotEmpty()) {
-                return embedded
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "MediaMetadataRetriever failed for artwork: ${e.message}")
-        }
-
-        // 4. MediaStore album art URI
-        if (track.albumArtUri != null) {
-            try {
-                val pfd = context.contentResolver.openFileDescriptor(track.albumArtUri, "r")
-                if (pfd != null) {
-                    val stream = java.io.FileInputStream(pfd.fileDescriptor)
-                    val bytes = stream.readBytes()
-                    stream.close()
-                    pfd.close()
-                    if (bytes.isNotEmpty()) {
-                        return bytes
-                    }
-                }
-            } catch (e: Exception) {}
-        }
-
-        // 5. Check sidecar cover images in folder
+        // 3. Check sidecar cover images in folder (cover.jpg, folder.jpg, album.jpg)
         if (track.path.isNotBlank()) {
             try {
                 val audioFile = File(track.path)
@@ -169,6 +166,29 @@ object ArtworkExtractor {
                     }
                 }
             } catch (e: Exception) {}
+        }
+
+        // 4. Specialized direct extractor for Opus, OGG, and Vorbis comments if file tag wasn't checked
+        if (!fileTagChecked) {
+            val directOpusBytes = extractFromVorbisOrOpus(context, track)
+            if (directOpusBytes != null && directOpusBytes.isNotEmpty()) {
+                return directOpusBytes
+            }
+        }
+
+        // 5. MediaMetadataRetriever only as a fallback for opaque content URIs that JAudioTagger cannot open directly
+        if (!fileTagChecked && track.contentUri != Uri.EMPTY) {
+            try {
+                val mmr = MediaMetadataRetriever()
+                mmr.setDataSource(context, track.contentUri)
+                val embedded = mmr.embeddedPicture
+                mmr.release()
+                if (embedded != null && embedded.isNotEmpty()) {
+                    return embedded
+                }
+            } catch (e: Exception) {
+                // Ignore
+            }
         }
 
         return null

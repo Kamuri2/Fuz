@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -130,40 +131,48 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .padding(20.dp)
             ) {
-                // Crossfade
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = com.example.ui.Translations.get(settings.appLanguage, "crossfade_duration"),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(12.dp))
+                // Audio Engine & Gapless Playback (Media3 ExoPlayer)
+                Spacer(modifier = Modifier.height(16.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0x1AFFFFFF))
+                        .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    androidx.compose.material3.Slider(
-                        value = settings.crossfadeDuration,
-                        onValueChange = { onUpdateSettings(settings.copy(crossfadeDuration = it)) },
-                        valueRange = 0f..5f,
-                        steps = 49,
-                        modifier = Modifier.weight(1f),
-                        colors = androidx.compose.material3.SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = Color.White,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
                         )
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text(
-                        text = String.format("%.1f s", settings.crossfadeDuration),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.width(48.dp)
-                    )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Motor de Audio: Jetpack Media3 (ExoPlayer)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Reproducción continua Gapless sin cortes • FLAC nativo, MP3, AAC, OGG, Opus, WAV",
+                            fontSize = 12.sp,
+                            color = GlassTextSecondary,
+                            lineHeight = 16.sp
+                        )
+                    }
                 }
+                Spacer(modifier = Modifier.height(18.dp))
 
 
                 // Section Title: Appearance & Themes
