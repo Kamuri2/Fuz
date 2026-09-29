@@ -226,6 +226,62 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(18.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Color(0x1FFFFFFF))
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Crossfade Duration (Default 100 ms / 0.1 s)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Crossfade",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = if (settings.crossfadeDuration <= 0.15f) "100 ms" else String.format(java.util.Locale.US, "%.1f s", settings.crossfadeDuration),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Slider(
+                    value = settings.crossfadeDuration,
+                    onValueChange = {
+                        val rounded = Math.round(it * 10f) / 10f
+                        onUpdateSettings(
+                            settings.copy(
+                                crossfadeDuration = rounded,
+                                fadeOutDuration = rounded,
+                                fadeInDuration = rounded
+                            )
+                        )
+                    },
+                    valueRange = 0f..5f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color.White,
+                        activeTrackColor = Color.White,
+                        inactiveTrackColor = Color(0x33FFFFFF)
+                    )
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("0s", fontSize = 11.sp, color = GlassTextSecondary)
+                    Text("5s", fontSize = 11.sp, color = GlassTextSecondary)
+                }
             }
         }
 

@@ -60,21 +60,11 @@ class AudioPlayerManager private constructor(private val context: Context) {
     private var progressJob: Job? = null
     private var sleepTimerJob: Job? = null
 
-    private var nextCrossfadeTrack: Track? = null
-    private var nextCrossfadeIndex: Int = -1
-
     private val crossfadeEngine by lazy {
         CrossfadeEngine(
             context = context,
-            crossfadeDurationMs = 100L,
-            playerFactory = { createExoPlayerInstance() },
-            onHandover = { newPlayer ->
-                val nextTrk = nextCrossfadeTrack
-                val nextIdx = nextCrossfadeIndex
-                if (nextTrk != null && nextIdx >= 0) {
-                    onCrossfadeHandover(newPlayer, nextIdx, nextTrk)
-                }
-            }
+            fadeOutDurationMs = 100L,
+            fadeInDurationMs = 100L
         )
     }
 
@@ -250,6 +240,14 @@ class AudioPlayerManager private constructor(private val context: Context) {
 
                     scope.launch {
                         socialRepository.recordPlayback(track.id)
+                    }
+
+                    // S-curve smooth volume fade-in when track auto-transitions
+                    if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                        val fadeInMs = (_appSettings.value.fadeInDuration * 1000L).toLong()
+                        if (fadeInMs > 0L) {
+                            crossfadeEngine.startFadeIn(fadeInMs)
+                        }
                     }
                 }
 
@@ -605,34 +603,6 @@ class AudioPlayerManager private constructor(private val context: Context) {
         }
     }
 
-    private fun onCrossfadeHandover(newPlayer: ExoPlayer, nextIndex: Int, nextTrack: Track) {
-        val oldPlayer = exoPlayer
-        oldPlayer?.removeListener(playerListener)
-        exoPlayer = newPlayer
-        _currentIndex.value = nextIndex
-        _currentTrack.value = nextTrack
-        saveLastTrackId(nextTrack.id)
-
-        scope.launch {
-            socialRepository.recordPlayback(nextTrack.id)
-        }
-
-        val tracks = _playlist.value
-        if (nextIndex in tracks.indices) {
-            if (nextIndex > 0) {
-                val previousTracks = tracks.subList(0, nextIndex)
-                newPlayer.addMediaItems(0, previousTracks.map { trackToMediaItem(it) })
-            }
-            if (nextIndex + 1 < tracks.size) {
-                val remainingTracks = tracks.subList(nextIndex + 1, tracks.size)
-                newPlayer.addMediaItems(remainingTracks.map { trackToMediaItem(it) })
-            }
-        }
-        newPlayer.addListener(playerListener)
-        crossfadeEngine.attachActivePlayer(newPlayer, _volume.value)
-        startProgressTracker()
-    }
-
     private fun startProgressTracker() {
         stopProgressTracker()
         progressJob = scope.launch {
@@ -646,29 +616,13 @@ class AudioPlayerManager private constructor(private val context: Context) {
                         _durationMs.value = dur
                     }
 
-                    // S-Curve Crossfade check between consecutive tracks
-                    val crossfadeDuration = if (_appSettings.value.crossfadeDuration > 0f) {
-                        (_appSettings.value.crossfadeDuration * 1000L).toLong()
-                    } else {
-                        100L // Default 100ms (0.1s) crossfade window
-                    }
+                    // S-Curve Fade-Out check at the end of the song
+                    val fadeOutMs = (_appSettings.value.fadeOutDuration * 1000L).toLong()
 
-                    if (dur > crossfadeDuration * 2) {
+                    if (fadeOutMs > 0L && dur > fadeOutMs * 2) {
                         val remaining = dur - pos
-                        val nextInfo = getNextTrackInfo()
-                        if (nextInfo != null) {
-                            nextCrossfadeIndex = nextInfo.first
-                            nextCrossfadeTrack = nextInfo.second
-                            val nextItem = trackToMediaItem(nextInfo.second)
-
-                            // Preload incoming track 10s before
-                            if (remaining in (crossfadeDuration + 1)..10_000L) {
-                                crossfadeEngine.preloadNext(nextItem)
-                            }
-                            // Start S-curve crossfade when remaining <= crossfade window
-                            if (remaining in 1..crossfadeDuration && !crossfadeEngine.isCrossfading) {
-                                crossfadeEngine.startCrossfade(nextItem, crossfadeDuration)
-                            }
+                        if (remaining in 1..fadeOutMs) {
+                            crossfadeEngine.applyFadeOut(remaining, fadeOutMs)
                         }
                     }
                 }
@@ -787,7 +741,9 @@ class AudioPlayerManager private constructor(private val context: Context) {
                 lyricsFontSizePercent = prefs.getInt("lyricsFontSizePercent", 110),
                 isLyricsTranslationEnabled = prefs.getBoolean("isLyricsTranslationEnabled", false),
                 targetTranslationLanguage = prefs.getString("targetTranslationLanguage", "Spanish") ?: "Spanish",
-                crossfadeDuration = prefs.getFloat("crossfadeDuration", 0.1f)
+                crossfadeDuration = prefs.getFloat("crossfadeDuration", 0.1f),
+                fadeOutDuration = prefs.getFloat("fadeOutDuration", 0.1f),
+                fadeInDuration = prefs.getFloat("fadeInDuration", 0.1f)
             )
         } catch (e: Exception) {
             AppSettings()
@@ -805,6 +761,8 @@ class AudioPlayerManager private constructor(private val context: Context) {
                 putBoolean("isLyricsTranslationEnabled", settings.isLyricsTranslationEnabled)
                 putString("targetTranslationLanguage", settings.targetTranslationLanguage)
                 putFloat("crossfadeDuration", settings.crossfadeDuration)
+                putFloat("fadeOutDuration", settings.fadeOutDuration)
+                putFloat("fadeInDuration", settings.fadeInDuration)
                 apply()
             }
         } catch (e: Exception) {

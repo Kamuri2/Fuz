@@ -8,61 +8,52 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 
 /**
- * Two-player Crossfade Engine for seamless, gapless track transitions.
- *
- * Implements an S-curve (smoothstep) volume fade between the outgoing active player
- * and incoming next player over a crossfade window (default 0.5 seconds), eliminating
- * audio cuts and abrupt transitions between consecutive songs.
+ * Crossfade Engine for seamless S-curve volume transitions on the active player.
+ * Eliminates audio cuts, clicks, and abrupt transitions without desynchronizing the playback queue.
  */
 class CrossfadeEngine(
     private val context: Context,
+    var fadeOutDurationMs: Long = 100L,
+    var fadeInDurationMs: Long = 100L,
     var crossfadeDurationMs: Long = 100L,
-    private val playerFactory: () -> ExoPlayer,
-    private val onHandover: (newPlayer: ExoPlayer) -> Unit
+    private val playerFactory: () -> ExoPlayer = { error("Unused") },
+    private val onHandover: (newPlayer: ExoPlayer) -> Unit = {}
 ) {
     private var activePlayer: ExoPlayer? = null
-    private var incomingPlayer: ExoPlayer? = null
     var isCrossfading = false
         private set
     private var crossfadeStartTime = 0L
+    private var currentFadeInDuration = 100L
     private var userVolume = 1f
-    private var preloadedMediaItem: MediaItem? = null
 
     private val handler = Handler(Looper.getMainLooper())
-    private val ticker = object : Runnable {
+
+    private val fadeInTicker = object : Runnable {
         override fun run() {
-            if (!isCrossfading) return
+            val player = activePlayer ?: return
             val elapsed = SystemClock.elapsedRealtime() - crossfadeStartTime
-            val duration = crossfadeDurationMs.coerceAtLeast(100L)
+            val duration = currentFadeInDuration.coerceAtLeast(50L)
             val progress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
 
-            // Curva S (smoothstep: t * t * (3 - 2t)) para un fade más natural
+            // S-Curve (smoothstep: t * t * (3 - 2t))
             val smooth = progress * progress * (3f - 2f * progress)
+            player.volume = smooth * userVolume
 
-            activePlayer?.volume = (1f - smooth) * userVolume
-            incomingPlayer?.volume = smooth * userVolume
-
-            if (progress >= 1f) {
-                // Handover: Incoming player se convierte en el reproductor principal
-                val newActive = incomingPlayer
-                activePlayer?.release()
-                activePlayer = newActive
-                incomingPlayer = null
-                isCrossfading = false
-                preloadedMediaItem = null
-                if (newActive != null) {
-                    newActive.volume = userVolume
-                    onHandover(newActive)
-                }
+            if (progress < 1f) {
+                handler.postDelayed(this, 15)
             } else {
-                handler.postDelayed(this, 15) // tick cada 15ms para suavidad en 100ms
+                player.volume = userVolume
+                isCrossfading = false
             }
         }
     }
 
-    fun attachActivePlayer(player: ExoPlayer, volume: Float = 1f) {
+    fun attachActivePlayer(player: ExoPlayer, volume: Float) {
         activePlayer = player
         userVolume = volume
+        if (!isCrossfading) {
+            player.volume = volume
+        }
     }
 
     fun setVolume(vol: Float) {
@@ -72,62 +63,40 @@ class CrossfadeEngine(
         }
     }
 
-    /** Pre-carga la siguiente pista con anticipación (ej. 10s antes del fin) */
+    /** Preload stub (handled natively by ExoPlayer) */
     fun preloadNext(nextItem: MediaItem) {
-        if (isCrossfading) return
-        if (incomingPlayer == null || preloadedMediaItem?.mediaId != nextItem.mediaId) {
-            incomingPlayer?.release()
-            preloadedMediaItem = nextItem
-            incomingPlayer = playerFactory().apply {
-                setMediaItem(nextItem)
-                prepare()
-                playWhenReady = false // Solo pre-carga, no suena aún
-                volume = 0f
-            }
-        }
+        // Handled natively by ExoPlayer buffer
     }
 
-    /** Inicia el crossfade en los últimos N ms */
-    fun startCrossfade(nextItem: MediaItem, customDurationMs: Long = crossfadeDurationMs) {
-        if (isCrossfading || activePlayer == null) return
-        crossfadeDurationMs = customDurationMs.coerceAtLeast(100L)
+    /** Smooth S-curve volume fade out during the last N ms of a track */
+    fun applyFadeOut(remainingMs: Long, customDurationMs: Long = fadeOutDurationMs) {
+        val player = activePlayer ?: return
+        val duration = customDurationMs.coerceAtLeast(50L)
+        val progress = (remainingMs.toFloat() / duration).coerceIn(0f, 1f)
+        val smooth = progress * progress * (3f - 2f * progress)
+        player.volume = smooth * userVolume
+    }
 
-        if (incomingPlayer == null || preloadedMediaItem?.mediaId != nextItem.mediaId) {
-            incomingPlayer?.release()
-            incomingPlayer = playerFactory().apply {
-                setMediaItem(nextItem)
-                prepare()
-            }
-        }
-
-        val incoming = incomingPlayer ?: return
-        incoming.volume = 0f
-        incoming.playWhenReady = true
-        incoming.play()
-
+    /** Smooth S-curve volume fade in at the beginning of the next track */
+    fun startFadeIn(customDurationMs: Long = fadeInDurationMs) {
+        val player = activePlayer ?: return
+        currentFadeInDuration = customDurationMs.coerceAtLeast(50L)
         isCrossfading = true
         crossfadeStartTime = SystemClock.elapsedRealtime()
-        handler.removeCallbacks(ticker)
-        handler.post(ticker)
+        player.volume = 0f
+        handler.removeCallbacks(fadeInTicker)
+        handler.post(fadeInTicker)
     }
 
     fun cancelCrossfade() {
-        if (isCrossfading || incomingPlayer != null) {
-            handler.removeCallbacks(ticker)
-            isCrossfading = false
-            incomingPlayer?.release()
-            incomingPlayer = null
-            preloadedMediaItem = null
-            activePlayer?.volume = userVolume
-        }
+        handler.removeCallbacks(fadeInTicker)
+        isCrossfading = false
+        activePlayer?.volume = userVolume
     }
 
     fun release() {
-        handler.removeCallbacks(ticker)
+        handler.removeCallbacks(fadeInTicker)
         isCrossfading = false
-        incomingPlayer?.release()
-        incomingPlayer = null
-        preloadedMediaItem = null
         activePlayer = null
     }
 }
