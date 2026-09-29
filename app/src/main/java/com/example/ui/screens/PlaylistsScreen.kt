@@ -98,6 +98,10 @@ fun PlaylistsScreen(
                             if (currentTarget != null) {
                                 val updated = currentTarget.copy(imageUri = savedUriString)
                                 socialRepository.updatePlaylist(updated)
+                                playlistPrefs.edit()
+                                    .putString("cover_${pId}", savedUriString)
+                                    .putString("cover_${currentTarget.name}", savedUriString)
+                                    .apply()
                                 if (editPlaylistTarget?.playlistId == pId) {
                                     editPlaylistTarget = updated
                                 }
@@ -173,12 +177,16 @@ fun PlaylistsScreen(
                             .size(130.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color(0xFF282828))
-                            .clickable { imagePicker.launch("image/*") },
+                            .clickable {
+                                pendingPhotoTarget = currentEdit.playlistId.toString()
+                                imagePicker.launch("image/*")
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (currentEdit.imageUri != null) {
+                        val currentImageUri = editPlaylistTarget?.imageUri ?: currentEdit.imageUri
+                        if (currentImageUri != null) {
                             AsyncImage(
-                                model = Uri.parse(currentEdit.imageUri),
+                                model = Uri.parse(currentImageUri),
                                 contentDescription = "Cover preview",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()

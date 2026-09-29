@@ -2,15 +2,23 @@ package com.example.data
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
-import org.jaudiotagger.tag.id3.framebody.FrameBodyUSLT
+import org.jaudiotagger.tag.Tag
+import org.jaudiotagger.tag.flac.FlacTag
+import org.jaudiotagger.tag.id3.AbstractID3v2Frame
+import org.jaudiotagger.tag.id3.AbstractID3v2Tag
 import org.jaudiotagger.tag.id3.framebody.FrameBodySYLT
+import org.jaudiotagger.tag.id3.framebody.FrameBodyTXXX
+import org.jaudiotagger.tag.id3.framebody.FrameBodyUSLT
+import org.jaudiotagger.tag.vorbiscomment.VorbisCommentTag
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.io.ByteArrayOutputStream
 
 object AudioLyricsExtractor {
+    private const val TAG = "AudioLyricsExtractor"
 
     data class LyricsResult(
         val lyrics: String?,
@@ -19,110 +27,162 @@ object AudioLyricsExtractor {
     )
 
     fun extractLyrics(context: Context, audioUri: Uri, audioFilePath: String?): LyricsResult {
+        // 1. PRIMARY SOURCE: Embedded lyrics inside audio file tags via JAudioTagger
+        // MediaMetadataRetriever does not expose USLT/UNSYNCEDLYRICS/Vorbis tags, so JAudioTagger is essential
+        val embeddedResult = extractEmbeddedLyrics(context, audioUri, audioFilePath)
+        if (embeddedResult != null && !embeddedResult.lyrics.isNullOrBlank()) {
+            return embeddedResult
+        }
+
+        // 2. SECONDARY SOURCE: Sidecar file (.lrc, .txt, .srt) adjacent to the audio track
         val externalLyrics = checkAdjacentLyricsFile(audioFilePath)
-        if (externalLyrics != null) {
+        if (externalLyrics != null && externalLyrics.isNotBlank()) {
             val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(externalLyrics)
-            return LyricsResult(lyrics = externalLyrics, isSynced = isSynced, source = "EXTERNAL_FILE")
+            return LyricsResult(lyrics = externalLyrics.trim(), isSynced = isSynced, source = "EXTERNAL_FILE")
         }
 
-        var tempFile: File? = null
-        try {
-            val fileToRead = if (audioFilePath != null && File(audioFilePath).exists()) {
-                File(audioFilePath)
-            } else {
-                tempFile = createTempAudioHeader(context, audioUri)
-                tempFile
-            }
-
-            if (fileToRead != null && fileToRead.exists()) {
-                val audioFile = AudioFileIO.read(fileToRead)
-                val tag = audioFile.tag
-
-                if (tag != null) {
-                    if (tag is org.jaudiotagger.tag.id3.AbstractID3v2Tag) {
-                        val syltFrame = tag.getFrame("SYLT") as? org.jaudiotagger.tag.id3.AbstractID3v2Frame
-                        if (syltFrame != null && syltFrame.body is org.jaudiotagger.tag.id3.framebody.FrameBodySYLT) {
-                            val syltBody = syltFrame.body as org.jaudiotagger.tag.id3.framebody.FrameBodySYLT
-                            try {
-                                val lyricsBytes = syltBody.lyrics
-                                if (lyricsBytes != null && lyricsBytes.isNotEmpty()) {
-                                    val parsedLrc = parseSyltToLrc(lyricsBytes)
-                                    if (parsedLrc.isNotBlank()) {
-                                        return LyricsResult(lyrics = parsedLrc, isSynced = true, source = "ID3_SYLT")
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
-                    }
-
-                    val fields = tag.fields
-                    while (fields.hasNext()) {
-                        val field = fields.next()
-                        val lowerId = field.id.lowercase()
-                        if (lowerId.contains("lyric") || lowerId.contains("sylt") || lowerId.contains("uslt")) {
-                            if (!field.isBinary) {
-                                val content = field.toString()
-                                if (!content.isNullOrBlank() && content.length > 20) {
-                                    val cleanContent = tag.getFirst(field.id).takeIf { it.isNotBlank() } ?: content
-                                    val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(cleanContent)
-                                    return LyricsResult(lyrics = cleanContent, isSynced = isSynced, source = "TAG_${field.id.uppercase()}")
-                                }
-                            }
-                        }
-                    }
-
-                    if (tag is org.jaudiotagger.tag.id3.AbstractID3v2Tag) {
-                        val usltFrame = tag.getFrame("USLT") as? org.jaudiotagger.tag.id3.AbstractID3v2Frame
-                        if (usltFrame != null && usltFrame.body is FrameBodyUSLT) {
-                            val lyricText = (usltFrame.body as FrameBodyUSLT).lyric
-                            if (!lyricText.isNullOrBlank()) {
-                                val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(lyricText)
-                                return LyricsResult(lyrics = lyricText, isSynced = isSynced, source = "ID3_USLT")
-                            }
-                        }
-
-                        val txxxFrames = tag.getFrame("TXXX")
-                        if (txxxFrames != null) {
-                            val framesList = if (txxxFrames is List<*>) txxxFrames else listOf(txxxFrames)
-                            for (frame in framesList) {
-                                val txxxFrame = frame as? org.jaudiotagger.tag.id3.AbstractID3v2Frame
-                                if (txxxFrame?.body is org.jaudiotagger.tag.id3.framebody.FrameBodyTXXX) {
-                                    val body = txxxFrame.body as org.jaudiotagger.tag.id3.framebody.FrameBodyTXXX
-                                    if (body.description.equals("LYRICS", ignoreCase = true) || body.description.equals("UNSYNCEDLYRICS", ignoreCase = true)) {
-                                        val lyricText = body.text
-                                        if (!lyricText.isNullOrBlank()) {
-                                            val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(lyricText)
-                                            return LyricsResult(lyrics = lyricText, isSynced = isSynced, source = "ID3_TXXX")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    val rawLyrics = tag.getFirst(FieldKey.LYRICS)
-                    if (!rawLyrics.isNullOrBlank()) {
-                        val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(rawLyrics)
-                        return LyricsResult(lyrics = rawLyrics, isSynced = isSynced, source = if (isSynced) "EMBEDDED_LRC" else "EMBEDDED_UNSYNCED")
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        } finally {
-            tempFile?.delete()
-        }
-        
+        // 3. TERTIARY SOURCE: Direct deep scan for Opus/Ogg Vorbis packets
         if (audioFilePath != null) {
             val deepScanResult = getOpusLyricsDeepScan(audioFilePath)
-            if (deepScanResult != null) {
+            if (deepScanResult != null && !deepScanResult.lyrics.isNullOrBlank()) {
                 return deepScanResult
             }
         }
 
         return LyricsResult(lyrics = null, isSynced = false, source = "NONE")
+    }
+
+    private fun extractEmbeddedLyrics(context: Context, audioUri: Uri, audioFilePath: String?): LyricsResult? {
+        var tempFile: File? = null
+        try {
+            val fileToRead = if (audioFilePath != null && File(audioFilePath).exists() && File(audioFilePath).canRead()) {
+                File(audioFilePath)
+            } else if (audioUri != Uri.EMPTY) {
+                tempFile = createTempAudioHeader(context, audioUri)
+                tempFile
+            } else {
+                null
+            }
+
+            if (fileToRead != null && fileToRead.exists()) {
+                val audioFile = AudioFileIO.read(fileToRead)
+                val tag: Tag? = audioFile.tag
+
+                if (tag != null) {
+                    // Check synchronized ID3v2 SYLT frame first (highest fidelity sync lyrics)
+                    if (tag is AbstractID3v2Tag) {
+                        try {
+                            val syltFrame = tag.getFrame("SYLT") as? AbstractID3v2Frame
+                            if (syltFrame != null && syltFrame.body is FrameBodySYLT) {
+                                val syltBody = syltFrame.body as FrameBodySYLT
+                                val lyricsBytes = syltBody.lyrics
+                                if (lyricsBytes != null && lyricsBytes.isNotEmpty()) {
+                                    val parsedLrc = parseSyltToLrc(lyricsBytes)
+                                    if (parsedLrc.isNotBlank()) {
+                                        return LyricsResult(lyrics = parsedLrc, isSynced = true, source = "JAUDIOTAGGER_ID3_SYLT")
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.d(TAG, "SYLT frame parsing failed: ${e.message}")
+                        }
+
+                        // Check ID3v2 USLT frame (Unsynchronized lyric/text transcription)
+                        try {
+                            val usltFrame = tag.getFrame("USLT") as? AbstractID3v2Frame
+                            if (usltFrame != null && usltFrame.body is FrameBodyUSLT) {
+                                val lyricText = (usltFrame.body as FrameBodyUSLT).lyric
+                                if (!lyricText.isNullOrBlank()) {
+                                    val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(lyricText)
+                                    return LyricsResult(lyrics = lyricText.trim(), isSynced = isSynced, source = "JAUDIOTAGGER_ID3_USLT")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.d(TAG, "USLT frame check failed: ${e.message}")
+                        }
+                    }
+
+                    // FieldKey.LYRICS is jaudiotagger's standard mapping for MP3 (USLT) and FLAC/OGG (LYRICS)
+                    try {
+                        val standardLyrics = tag.getFirst(FieldKey.LYRICS)
+                        if (!standardLyrics.isNullOrBlank()) {
+                            val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(standardLyrics)
+                            return LyricsResult(lyrics = standardLyrics.trim(), isSynced = isSynced, source = "JAUDIOTAGGER_FIELD_LYRICS")
+                        }
+                    } catch (e: Exception) {
+                        Log.d(TAG, "tag.getFirst(FieldKey.LYRICS) failed: ${e.message}")
+                    }
+
+                    // For FLAC & Vorbis Comment tags: check specific tags: LYRICS, UNSYNCEDLYRICS, UNSYNCED_LYRICS
+                    if (tag is FlacTag || tag is VorbisCommentTag) {
+                        val candidateKeys = listOf("LYRICS", "UNSYNCEDLYRICS", "UNSYNCED_LYRICS", "SYNCEDLYRICS", "TEXT")
+                        for (key in candidateKeys) {
+                            try {
+                                val valText = tag.getFirst(key)
+                                if (!valText.isNullOrBlank()) {
+                                    val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(valText)
+                                    return LyricsResult(lyrics = valText.trim(), isSynced = isSynced, source = "JAUDIOTAGGER_VORBIS_$key")
+                                }
+                            } catch (e: Exception) {}
+                        }
+                    }
+
+                    // Check ID3v2 TXXX user-defined text frames (often used for UNSYNCEDLYRICS)
+                    if (tag is AbstractID3v2Tag) {
+                        try {
+                            val txxxFrames = tag.getFrame("TXXX")
+                            if (txxxFrames != null) {
+                                val framesList = if (txxxFrames is List<*>) txxxFrames else listOf(txxxFrames)
+                                for (frame in framesList) {
+                                    val txxxFrame = frame as? AbstractID3v2Frame
+                                    if (txxxFrame?.body is FrameBodyTXXX) {
+                                        val body = txxxFrame.body as FrameBodyTXXX
+                                        if (body.description.equals("LYRICS", ignoreCase = true) ||
+                                            body.description.equals("UNSYNCEDLYRICS", ignoreCase = true) ||
+                                            body.description.equals("UNSYNCED_LYRICS", ignoreCase = true)
+                                        ) {
+                                            val lyricText = body.text
+                                            if (!lyricText.isNullOrBlank()) {
+                                                val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(lyricText)
+                                                return LyricsResult(lyrics = lyricText.trim(), isSynced = isSynced, source = "JAUDIOTAGGER_ID3_TXXX")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.d(TAG, "TXXX check failed: ${e.message}")
+                        }
+                    }
+
+                    // General fields iterator fallback
+                    try {
+                        val fields = tag.fields
+                        while (fields.hasNext()) {
+                            val field = fields.next()
+                            val lowerId = field.id.lowercase()
+                            if (lowerId.contains("lyric") || lowerId.contains("sylt") || lowerId.contains("uslt")) {
+                                if (!field.isBinary) {
+                                    val content = field.toString()
+                                    if (!content.isNullOrBlank() && content.length > 15) {
+                                        val cleanContent = tag.getFirst(field.id).takeIf { it.isNotBlank() } ?: content
+                                        val isSynced = Regex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]").containsMatchIn(cleanContent)
+                                        return LyricsResult(lyrics = cleanContent.trim(), isSynced = isSynced, source = "JAUDIOTAGGER_FIELD_${field.id.uppercase()}")
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.d(TAG, "General fields iterator failed: ${e.message}")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "extractEmbeddedLyrics error: ${e.message}")
+        } finally {
+            tempFile?.delete()
+        }
+        return null
     }
 
     private fun parseSyltToLrc(lyricsBytes: ByteArray): String {

@@ -257,92 +257,51 @@ fun AlbumsScreen(
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        LazyVerticalGrid(
-                            state = gridState,
-                            columns = GridCells.Fixed(2),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                        ) {
-                            items(filteredAlbums) { albumName ->
-                                val albumTracks = albumGroups[albumName] ?: emptyList()
-                                val firstTrack = albumTracks.firstOrNull()
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Fixed(2),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(filteredAlbums) { albumName ->
+                            val albumTracks = albumGroups[albumName] ?: emptyList()
+                            val firstTrack = albumTracks.firstOrNull()
 
-                                val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { selectedAlbum = albumName },
-                                    shape = RoundedCornerShape(20.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                                ) {
-                                    Column(modifier = Modifier.padding(4.dp)) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .aspectRatio(1f)
-                                                .clip(RoundedCornerShape(14.dp))
-                                                .background(Color(0xFF2B2B2B)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            when {
-                                                artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                                firstTrack != null -> TrackImage(track = firstTrack, modifier = Modifier.fillMaxSize())
-                                                else -> Icon(imageVector = Icons.Default.Album, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
-                                            }
+                            val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedAlbum = albumName },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                            ) {
+                                Column(modifier = Modifier.padding(4.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(Color(0xFF2B2B2B)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        when {
+                                            artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                            firstTrack != null -> TrackImage(track = firstTrack, modifier = Modifier.fillMaxSize())
+                                            else -> Icon(imageVector = Icons.Default.Album, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
                                         }
-
-                                        Spacer(modifier = Modifier.height(10.dp))
-
-                                        Text(text = albumName, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(text = "${firstTrack?.artist ?: "Various"} • ${albumTracks.size} tracks", fontSize = 12.sp, color = GlassTextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Text(text = albumName, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(text = "${firstTrack?.artist ?: "Various"} • ${albumTracks.size} tracks", fontSize = 12.sp, color = GlassTextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
-                            item { Spacer(modifier = Modifier.height(100.dp)) }
-                            item { Spacer(modifier = Modifier.height(100.dp)) }
                         }
-
-                        // Vertical Alphabet Drag/Tap Scroller
-                        var stripHeight by remember { mutableFloatStateOf(1f) }
-                        Column(
-                            modifier = Modifier
-                                .width(20.dp)
-                                .fillMaxHeight()
-                                .padding(bottom = 90.dp)
-                                .onSizeChanged { stripHeight = it.height.toFloat() }
-                                .pointerInput(filteredAlbums, alphabet) {
-                                    detectVerticalDragGestures(
-                                        onDragStart = { offset ->
-                                            val percent = (offset.y / stripHeight).coerceIn(0f, 0.999f)
-                                            val letterIdx = (percent * alphabet.size).toInt().coerceIn(0, alphabet.lastIndex)
-                                            jumpToLetter(alphabet[letterIdx])
-                                        },
-                                        onVerticalDrag = { change, _ ->
-                                            val percent = (change.position.y / stripHeight).coerceIn(0f, 0.999f)
-                                            val letterIdx = (percent * alphabet.size).toInt().coerceIn(0, alphabet.lastIndex)
-                                            jumpToLetter(alphabet[letterIdx])
-                                        }
-                                    )
-                                },
-                            verticalArrangement = Arrangement.SpaceBetween,
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            alphabet.forEach { letter ->
-                                val hasAlbums = letterIndices.containsKey(letter)
-                                Text(
-                                    text = letter,
-                                    fontSize = 9.sp,
-                                    fontWeight = if (hasAlbums) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (hasAlbums) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.25f),
-                                    modifier = Modifier.clickable { jumpToLetter(letter) }
-                                )
-                            }
-                        }
+                        item { Spacer(modifier = Modifier.height(100.dp)) }
+                        item { Spacer(modifier = Modifier.height(100.dp)) }
                     }
 
                     // Floating Letter Bubble on Jump

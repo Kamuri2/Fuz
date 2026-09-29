@@ -375,7 +375,8 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         onNavigateToArtist = { name -> 
                             initialArtist = name
                             // Do not change currentScreen
-                        }
+                        },
+                        settings = appSettings
                     )
 
                     NavigationScreen.FOLDERS -> FoldersScreen(
@@ -551,7 +552,8 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                     showQueueSheet = false
                 },
                 onRemoveFromQueue = { idx -> playerManager.removeFromQueue(idx) },
-                onSetPlayNext = { track -> playerManager.setPlayNext(track) }
+                onSetPlayNext = { track -> playerManager.setPlayNext(track) },
+                language = appSettings.appLanguage
             )
         }
     }

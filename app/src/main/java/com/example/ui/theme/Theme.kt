@@ -1,10 +1,13 @@
 package com.example.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import com.example.model.AppSettings
 
@@ -51,10 +54,21 @@ fun LiquidMusicTheme(
         )
     }
 
+    val currentFontFamily = remember(appSettings.fontFamilyName) {
+        getFontFamily(appSettings.fontFamilyName)
+    }
+
+    val typography = remember(appSettings.fontFamilyName) {
+        createAppTypography(appSettings.fontFamilyName)
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+        typography = typography
+    ) {
+        CompositionLocalProvider(
+            LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = currentFontFamily),
+            content = content
+        )
+    }
 }
-

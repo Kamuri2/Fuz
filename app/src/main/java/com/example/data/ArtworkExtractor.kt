@@ -73,6 +73,21 @@ object ArtworkExtractor {
             cache.get(key)?.let { return it }
         }
 
+        // 1. Try MediaMetadataRetriever with downsampling off main thread
+        if (track.contentUri != Uri.EMPTY) {
+            getAlbumArtDownsampled(context, track.contentUri, targetDim)?.let { bitmap ->
+                if (key.isNotBlank()) cache.put(key, bitmap)
+                return bitmap
+            }
+        }
+        if (track.path.isNotBlank()) {
+            getAlbumArtDownsampled(track.path, targetDim)?.let { bitmap ->
+                if (key.isNotBlank()) cache.put(key, bitmap)
+                return bitmap
+            }
+        }
+
+        // 2. Fallback to JAudioTagger / Vorbis / Sidecar extraction
         val rawBytes = extractArtworkBytes(context, track)
         if (rawBytes == null) {
             if (key.isNotBlank()) {
@@ -88,6 +103,71 @@ object ArtworkExtractor {
             negativeCache.add(key)
         }
         return bitmap
+    }
+
+    /**
+     * Efficient downsampled embedded artwork extraction via MediaMetadataRetriever
+     * avoids allocating large 3000x3000px bitmaps in memory.
+     */
+    fun getAlbumArtDownsampled(
+        context: Context,
+        uri: Uri,
+        targetSize: Int = 600
+    ): Bitmap? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            val bytes = retriever.embeddedPicture ?: return null
+
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+
+            var sampleSize = 1
+            while (opts.outWidth / (sampleSize * 2) >= targetSize &&
+                   opts.outHeight / (sampleSize * 2) >= targetSize) {
+                sampleSize *= 2
+            }
+
+            val decodeOpts = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
+        } catch (e: Exception) {
+            null
+        } finally {
+            try { retriever.release() } catch (e: Exception) {}
+        }
+    }
+
+    fun getAlbumArtDownsampled(
+        path: String,
+        targetSize: Int = 600
+    ): Bitmap? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(path)
+            val bytes = retriever.embeddedPicture ?: return null
+
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+
+            var sampleSize = 1
+            while (opts.outWidth / (sampleSize * 2) >= targetSize &&
+                   opts.outHeight / (sampleSize * 2) >= targetSize) {
+                sampleSize *= 2
+            }
+
+            val decodeOpts = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
+        } catch (e: Exception) {
+            null
+        } finally {
+            try { retriever.release() } catch (e: Exception) {}
+        }
     }
 
     fun extractArtworkBytes(context: Context, track: Track): ByteArray? {
@@ -173,21 +253,6 @@ object ArtworkExtractor {
             val directOpusBytes = extractFromVorbisOrOpus(context, track)
             if (directOpusBytes != null && directOpusBytes.isNotEmpty()) {
                 return directOpusBytes
-            }
-        }
-
-        // 5. MediaMetadataRetriever only as a fallback for opaque content URIs that JAudioTagger cannot open directly
-        if (!fileTagChecked && track.contentUri != Uri.EMPTY) {
-            try {
-                val mmr = MediaMetadataRetriever()
-                mmr.setDataSource(context, track.contentUri)
-                val embedded = mmr.embeddedPicture
-                mmr.release()
-                if (embedded != null && embedded.isNotEmpty()) {
-                    return embedded
-                }
-            } catch (e: Exception) {
-                // Ignore
             }
         }
 

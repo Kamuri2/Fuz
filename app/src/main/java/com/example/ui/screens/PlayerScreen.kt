@@ -90,7 +90,7 @@ import com.example.model.Track
 import com.example.player.LoopMode
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.ArtistInfoTab
-import com.example.ui.components.ThinCircleSlider
+import com.example.ui.components.WaveformSeekBar
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextSecondary
 import kotlinx.coroutines.Dispatchers
@@ -152,6 +152,13 @@ fun PlayerScreen(
         com.example.model.LyricsParser.parseLrc(currentTrack?.lyrics ?: "")
     }
 
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekFraction by remember { mutableStateOf(0f) }
+
+    val effectiveDuration = if (durationMs > 0L) durationMs else (currentTrack?.durationMs ?: 0L)
+    val displayPositionMs = if (isSeeking) (seekFraction * effectiveDuration).toLong() else currentPositionMs
+    val currentProgress = if (isSeeking) seekFraction else (if (effectiveDuration > 0L) (currentPositionMs.toFloat() / effectiveDuration.toFloat()).coerceIn(0f, 1f) else 0f)
+
     // artworkBitmap removed in favor of TrackImage
 
     val formatTag = remember(currentTrack) {
@@ -205,14 +212,14 @@ fun PlayerScreen(
                     // Artwork Cover
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.81f)
+                            .fillMaxWidth(0.92f)
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color(0x1AFFFFFF)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (currentTrack != null) {
-                            com.example.ui.components.TrackImage(track = currentTrack, modifier = Modifier.fillMaxSize())
+                            com.example.ui.components.PlayerAlbumArt(track = currentTrack, modifier = Modifier.fillMaxSize())
                         } else {
                             Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(96.dp))
                         }
@@ -389,14 +396,34 @@ fun PlayerScreen(
                                 }
                             }
 
-                            // Progress bar & Timestamps
-                            Column(modifier = Modifier.fillMaxWidth()) {
+                            // Waveform Progress Bar with Audio Soundwaves
+                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                                WaveformSeekBar(
+                                    progress = currentProgress,
+                                    onProgressChange = { fraction ->
+                                        isSeeking = true
+                                        seekFraction = fraction
+                                    },
+                                    onProgressChangeFinished = {
+                                        isSeeking = false
+                                        val target = (seekFraction * effectiveDuration).toLong().coerceIn(0L, effectiveDuration)
+                                        onSeek(target)
+                                    },
+                                    isPlaying = isPlaying,
+                                    trackId = currentTrack?.id ?: 0L,
+                                    activeColor = MaterialTheme.colorScheme.primary,
+                                    height = 42.dp,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = formatDuration(currentPositionMs),
+                                        text = formatDuration(displayPositionMs),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = GlassTextMuted
@@ -408,11 +435,6 @@ fun PlayerScreen(
                                         color = GlassTextMuted
                                     )
                                 }
-                                ThinCircleSlider(
-                                    value = if (durationMs > 0) currentPositionMs.toFloat() / durationMs.toFloat() else 0f,
-                                    onValueChange = { fraction -> onSeek((fraction * durationMs).toLong()) },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
                             }
                             Spacer(modifier = Modifier.height(24.dp))
 
@@ -580,17 +602,21 @@ fun PlayerScreen(
                 Spacer(modifier = Modifier.height(2.dp))
 
                 AnimatedContent(
-                    targetState = currentTrack,
+                    targetState = currentTrack?.id ?: 0L,
                     transitionSpec = {
-                        if (slideDirection == 1) {
-                            (slideInHorizontally { width -> width } + fadeIn()).togetherWith(slideOutHorizontally { width -> -width } + fadeOut())
+                        val duration = 220
+                        if (slideDirection >= 0) {
+                            (slideInHorizontally(androidx.compose.animation.core.tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { width -> width / 3 } + fadeIn(androidx.compose.animation.core.tween(duration)))
+                                .togetherWith(slideOutHorizontally(androidx.compose.animation.core.tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { width -> -width / 3 } + fadeOut(androidx.compose.animation.core.tween(duration)))
                         } else {
-                            (slideInHorizontally { width -> -width } + fadeIn()).togetherWith(slideOutHorizontally { width -> width } + fadeOut())
+                            (slideInHorizontally(androidx.compose.animation.core.tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { width -> -width / 3 } + fadeIn(androidx.compose.animation.core.tween(duration)))
+                                .togetherWith(slideOutHorizontally(androidx.compose.animation.core.tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { width -> width / 3 } + fadeOut(androidx.compose.animation.core.tween(duration)))
                         }
                     },
                     label = "Track Transition",
                     modifier = Modifier.weight(1f)
-                ) { targetTrack ->
+                ) { _ ->
+                    val targetTrack = currentTrack
                     Crossfade(
                         targetState = showLyricsMode,
                         label = "LyricsModeToggle",
@@ -602,14 +628,14 @@ fun PlayerScreen(
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.86f)
+                                        .fillMaxWidth(0.97f)
                                         .aspectRatio(1f)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(Color(0x1AFFFFFF))
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 if (targetTrack != null) {
-                                    com.example.ui.components.TrackImage(
+                                    com.example.ui.components.PlayerAlbumArt(
                                         track = targetTrack,
                                         modifier = Modifier.fillMaxSize()
                                     )
@@ -832,21 +858,35 @@ fun PlayerScreen(
 
                 Spacer(modifier = Modifier.height(28.dp))
 
-                // Progress Bar & Duration Labels (Tightly attached right below Title)
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = formatDuration(currentPositionMs), fontSize = 12.sp, color = GlassTextMuted)
-                        Text(text = formatDuration(durationMs), fontSize = 12.sp, color = GlassTextMuted)
-                    }
-
-                    ThinCircleSlider(
-                        value = if (durationMs > 0) currentPositionMs.toFloat() / durationMs.toFloat() else 0f,
-                        onValueChange = { fraction -> onSeek((fraction * durationMs).toLong()) },
+                // Waveform Progress Bar with Audio Soundwaves
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+                    WaveformSeekBar(
+                        progress = currentProgress,
+                        onProgressChange = { fraction ->
+                            isSeeking = true
+                            seekFraction = fraction
+                        },
+                        onProgressChangeFinished = {
+                            isSeeking = false
+                            val target = (seekFraction * effectiveDuration).toLong().coerceIn(0L, effectiveDuration)
+                            onSeek(target)
+                        },
+                        isPlaying = isPlaying,
+                        trackId = currentTrack?.id ?: 0L,
+                        activeColor = MaterialTheme.colorScheme.primary,
+                        height = 46.dp,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = formatDuration(displayPositionMs), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = GlassTextMuted)
+                        Text(text = formatDuration(durationMs), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = GlassTextMuted)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))

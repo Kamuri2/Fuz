@@ -32,5 +32,5 @@ data class AppSettings(
     val lyricsFontSizePercent: Int = 110,
     val isLyricsTranslationEnabled: Boolean = false,
     val targetTranslationLanguage: String = "Spanish",
-    val crossfadeDuration: Float = 0f
+    val crossfadeDuration: Float = 0.1f
 )

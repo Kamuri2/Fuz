@@ -30,6 +30,7 @@ import com.example.ui.theme.GlassTextSecondary
 fun ThinCircleSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
+    onValueChangeFinished: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     activeColor: Color = Color.White,
     inactiveColor: Color = Color.White.copy(alpha = 0.2f),
@@ -40,6 +41,7 @@ fun ThinCircleSlider(
     Slider(
         value = value,
         onValueChange = onValueChange,
+        onValueChangeFinished = onValueChangeFinished,
         thumb = {
             Box(
                 modifier = Modifier

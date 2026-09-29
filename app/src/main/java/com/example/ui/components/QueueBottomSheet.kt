@@ -24,10 +24,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -68,7 +71,9 @@ fun QueueBottomSheet(
     onDismissRequest: () -> Unit,
     onTrackSelect: (Int) -> Unit,
     onRemoveFromQueue: (Int) -> Unit,
-    onSetPlayNext: (Track) -> Unit
+    onSetPlayNext: (Track) -> Unit,
+    onMoveInQueue: ((Int, Int) -> Unit)? = null,
+    language: String = "English"
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
@@ -106,7 +111,7 @@ fun QueueBottomSheet(
                 horizontalAlignment = Alignment.Start
             ) {
                 Text(
-                    text = "Queue",
+                    text = com.example.ui.Translations.get(language, "play_queue"),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -114,7 +119,7 @@ fun QueueBottomSheet(
                 Spacer(modifier = Modifier.height(2.dp))
                 val remainingCount = (queue.size - (currentIndex + 1)).coerceAtLeast(0)
                 Text(
-                    text = "$remainingCount songs remaining",
+                    text = "$remainingCount ${com.example.ui.Translations.get(language, "songs")}",
                     fontSize = 14.sp,
                     color = GlassTextMuted
                 )
@@ -128,23 +133,24 @@ fun QueueBottomSheet(
                         .height(300.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No hay canciones en la cola", color = GlassTextMuted)
+                    Text(com.example.ui.Translations.get(language, "no_track_playing"), color = GlassTextMuted)
                 }
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight(0.65f)
-                        .padding(horizontal = 20.dp)
+                        .fillMaxHeight(0.70f)
+                        .padding(horizontal = 16.dp)
                 ) {
-                    val visibleQueue = queue.drop(currentIndex)
                     itemsIndexed(
-                        items = visibleQueue,
-                        key = { index, track -> "${track.id}_${index + currentIndex}" }
+                        items = queue,
+                        key = { index, track -> "${track.id}_$index" }
                     ) { index, track ->
-                        val actualIndex = index + currentIndex
+                        val actualIndex = index
                         val isCurrent = actualIndex == currentIndex
+                        val canMoveUp = actualIndex > 0
+                        val canMoveDown = actualIndex < queue.lastIndex
                         val dismissState = rememberSwipeToDismissBoxState(
                             confirmValueChange = { value ->
                                 when (value) {
@@ -202,6 +208,12 @@ fun QueueBottomSheet(
                                 QueueTrackRowItem(
                                     track = track,
                                     isCurrent = isCurrent,
+                                    actualIndex = actualIndex,
+                                    queueSize = queue.size,
+                                    canMoveUp = canMoveUp,
+                                    canMoveDown = canMoveDown,
+                                    onMoveUp = { onMoveInQueue?.invoke(actualIndex, actualIndex - 1) },
+                                    onMoveDown = { onMoveInQueue?.invoke(actualIndex, actualIndex + 1) },
                                     onClick = { onTrackSelect(actualIndex) }
                                 )
                             }
@@ -218,6 +230,12 @@ fun QueueBottomSheet(
 private fun QueueTrackRowItem(
     track: Track,
     isCurrent: Boolean,
+    actualIndex: Int,
+    queueSize: Int,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
     onClick: () -> Unit
 ) {
     val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
@@ -228,19 +246,42 @@ private fun QueueTrackRowItem(
             .clip(RoundedCornerShape(16.dp))
             .background(if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else Color(0x1AFFFFFF))
             .clickable { onClick() }
-            .padding(vertical = 10.dp, horizontal = 12.dp)
+            .padding(vertical = 8.dp, horizontal = 10.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
+            // Drag handle with gesture
             Icon(
                 imageVector = Icons.Default.DragHandle,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.3f),
-                modifier = Modifier.size(20.dp)
+                contentDescription = "Arrastrar para mover",
+                tint = if (isCurrent) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .size(28.dp)
+                    .padding(2.dp)
+                    .pointerInput(actualIndex, queueSize) {
+                        var accum = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { accum = 0f },
+                            onDragEnd = { accum = 0f },
+                            onDragCancel = { accum = 0f },
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                accum += dragAmount
+                                val threshold = 36.dp.toPx()
+                                if (accum > threshold && canMoveDown) {
+                                    onMoveDown()
+                                    accum = 0f
+                                } else if (accum < -threshold && canMoveUp) {
+                                    onMoveUp()
+                                    accum = 0f
+                                }
+                            }
+                        )
+                    }
             )
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             
             Box(
                 modifier = Modifier
@@ -256,7 +297,7 @@ private fun QueueTrackRowItem(
                 }
             }
             
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = track.title,
@@ -275,7 +316,35 @@ private fun QueueTrackRowItem(
                 )
             }
             
-            // ELIMINAR button was here, I removed it per request.
+            // Up/Down reordering action buttons
+            if (queueSize > 1) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onMoveUp,
+                        enabled = canMoveUp,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Mover arriba",
+                            tint = if (canMoveUp) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.2f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = onMoveDown,
+                        enabled = canMoveDown,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Mover abajo",
+                            tint = if (canMoveDown) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.2f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }
