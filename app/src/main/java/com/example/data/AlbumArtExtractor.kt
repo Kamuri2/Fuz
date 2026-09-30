@@ -19,11 +19,39 @@ import java.nio.ByteOrder
 class AlbumArtExtractor(private val context: Context) {
 
     private val cacheDir = File(context.cacheDir, "album_art_hd")
+    private val noArtworkCache = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     init {
         if (!cacheDir.exists()) {
             cacheDir.mkdirs()
         }
+    }
+
+    /**
+     * Comprobación síncrona inmediata en caché de disco (0 ms de latencia).
+     */
+    fun getExistingArtFile(track: Track): File? {
+        val albumKey = if (track.album.isNotBlank()) track.album.lowercase().trim().hashCode().toLong() else -1L
+        if (albumKey != -1L) {
+            val albumFile = File(cacheDir, "album_$albumKey.jpg")
+            if (albumFile.exists() && albumFile.length() > 0) return albumFile
+        }
+
+        val trackFile = File(cacheDir, "track_${track.id}.jpg")
+        if (trackFile.exists() && trackFile.length() > 0) return trackFile
+
+        if (track.path.isNotBlank()) {
+            val f = File(track.path)
+            val fileCache = File(cacheDir, "${f.nameWithoutExtension}_${f.length()}.jpg")
+            if (fileCache.exists() && fileCache.length() > 0) return fileCache
+        }
+        return null
+    }
+
+    fun getExistingArtFile(audioFile: File): File? {
+        val cacheFile = File(cacheDir, "${audioFile.nameWithoutExtension}_${audioFile.length()}.jpg")
+        if (cacheFile.exists() && cacheFile.length() > 0) return cacheFile
+        return null
     }
 
     /**
@@ -36,8 +64,14 @@ class AlbumArtExtractor(private val context: Context) {
         val cacheFile = File(cacheDir, "${audioFile.nameWithoutExtension}_${audioFile.length()}.jpg")
         if (cacheFile.exists() && cacheFile.length() > 0) return cacheFile
 
+        if (noArtworkCache.contains(audioFile.absolutePath)) return null
+
         return try {
-            val bytes = extractOriginalArtworkBytes(audioFile) ?: return null
+            val bytes = extractOriginalArtworkBytes(audioFile)
+            if (bytes == null) {
+                noArtworkCache.add(audioFile.absolutePath)
+                return null
+            }
 
             cacheDir.mkdirs()
             cacheFile.writeBytes(bytes)
@@ -52,18 +86,32 @@ class AlbumArtExtractor(private val context: Context) {
      * Versión para Track: si tiene ruta física lee el archivo, sino usa contentUri con MMR.
      */
     fun getHighResArt(track: Track): File? {
+        // 1. Revisión síncrona en disco (0 ms)
+        getExistingArtFile(track)?.let { return it }
+
         if (track.path.isNotBlank()) {
             val file = File(track.path)
             if (file.exists() && file.canRead()) {
                 val art = getHighResArt(file)
-                if (art != null) return art
+                if (art != null) {
+                    val albumKey = if (track.album.isNotBlank()) track.album.lowercase().trim().hashCode().toLong() else -1L
+                    if (albumKey != -1L) {
+                        try {
+                            val albumFile = File(cacheDir, "album_$albumKey.jpg")
+                            if (!albumFile.exists()) art.copyTo(albumFile, overwrite = false)
+                        } catch (_: Exception) {}
+                    }
+                    return art
+                }
             }
         }
 
         // Intento con ContentUri si no hay ruta de archivo directa
         if (track.contentUri != Uri.EMPTY) {
-            val cacheFile = File(cacheDir, "track_${track.id}_${track.durationMs}.jpg")
+            val cacheFile = File(cacheDir, "track_${track.id}.jpg")
             if (cacheFile.exists() && cacheFile.length() > 0) return cacheFile
+            val uriKey = track.contentUri.toString()
+            if (noArtworkCache.contains(uriKey)) return null
 
             return try {
                 var bytes: ByteArray? = null
@@ -82,9 +130,11 @@ class AlbumArtExtractor(private val context: Context) {
                     cacheFile.writeBytes(bytes!!)
                     cacheFile
                 } else {
+                    noArtworkCache.add(uriKey)
                     null
                 }
             } catch (e: Exception) {
+                noArtworkCache.add(uriKey)
                 null
             }
         }

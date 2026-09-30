@@ -73,36 +73,56 @@ object ArtworkExtractor {
             cache.get(key)?.let { return it }
         }
 
-        // 1. Try MediaMetadataRetriever with downsampling off main thread
+        // 1. Check pre-extracted HD disk cache (0 ms)
+        try {
+            val hdFile = AlbumArtExtractor(context).getExistingArtFile(track)
+            if (hdFile != null && hdFile.exists() && hdFile.length() > 0) {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(hdFile.absolutePath, opts)
+                var sampleSize = 1
+                while (opts.outWidth / (sampleSize * 2) >= targetDim &&
+                       opts.outHeight / (sampleSize * 2) >= targetDim) {
+                    sampleSize *= 2
+                }
+                val decodeOpts = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                val bitmap = BitmapFactory.decodeFile(hdFile.absolutePath, decodeOpts)
+                if (bitmap != null) {
+                    if (key.isNotBlank()) cache.put(key, bitmap)
+                    return bitmap
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 2. Try JAudioTagger / Vorbis / Sidecar extraction directly (pure Kotlin/Java, no JNI errors)
+        val rawBytes = extractArtworkBytes(context, track)
+        if (rawBytes != null && rawBytes.isNotEmpty()) {
+            val bitmap = decodeSampledBitmapFromByteArray(rawBytes, targetDim)
+            if (bitmap != null) {
+                if (key.isNotBlank()) cache.put(key, bitmap)
+                return bitmap
+            }
+        }
+
+        // 3. Fallback to MediaMetadataRetriever once if JAudioTagger could not read
         if (track.contentUri != Uri.EMPTY) {
             getAlbumArtDownsampled(context, track.contentUri, targetDim)?.let { bitmap ->
                 if (key.isNotBlank()) cache.put(key, bitmap)
                 return bitmap
             }
-        }
-        if (track.path.isNotBlank()) {
+        } else if (track.path.isNotBlank()) {
             getAlbumArtDownsampled(track.path, targetDim)?.let { bitmap ->
                 if (key.isNotBlank()) cache.put(key, bitmap)
                 return bitmap
             }
         }
 
-        // 2. Fallback to JAudioTagger / Vorbis / Sidecar extraction
-        val rawBytes = extractArtworkBytes(context, track)
-        if (rawBytes == null) {
-            if (key.isNotBlank()) {
-                negativeCache.add(key)
-            }
-            return null
-        }
-
-        val bitmap = decodeSampledBitmapFromByteArray(rawBytes, targetDim)
-        if (bitmap != null && key.isNotBlank()) {
-            cache.put(key, bitmap)
-        } else if (key.isNotBlank()) {
+        if (key.isNotBlank()) {
             negativeCache.add(key)
         }
-        return bitmap
+        return null
     }
 
     /**

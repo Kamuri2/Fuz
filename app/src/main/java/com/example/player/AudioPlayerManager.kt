@@ -252,31 +252,7 @@ class AudioPlayerManager private constructor(private val context: Context) {
                 }
 
                 // If track is missing lyrics or technical metadata, extract in background
-                if (track.lyrics.isBlank() || track.bitrate.isBlank()) {
-                    scope.launch(Dispatchers.IO) {
-                        try {
-                            val enriched = com.example.data.MetadataReader.extractFullMetadata(context, track)
-                            val cur = _currentTrack.value
-                            if (cur != null && cur.id == track.id) {
-                                _currentTrack.value = cur.copy(
-                                    lyrics = if (cur.lyrics.isBlank()) enriched.lyrics else cur.lyrics,
-                                    bitrate = if (cur.bitrate.isBlank()) enriched.bitrate else cur.bitrate,
-                                    sampleRate = if (cur.sampleRate.isBlank()) enriched.sampleRate else cur.sampleRate
-                                )
-                            }
-                            val currentPlaylist = _playlist.value.toMutableList()
-                            if (currentIdx in currentPlaylist.indices && currentPlaylist[currentIdx].id == track.id) {
-                                currentPlaylist[currentIdx] = enriched
-                                _playlist.value = currentPlaylist
-                            }
-                            if (enriched.lyrics.isNotBlank()) {
-                                com.example.data.TrackRepository.updateTrackLyrics(context, track.id, enriched.lyrics)
-                            }
-                        } catch (e: Exception) {
-                            Log.d(TAG, "Metadata extraction fallback skipped: ${e.message}")
-                        }
-                    }
-                }
+                enrichTrackIfNeeded(track, currentIdx)
             }
         }
 
@@ -421,6 +397,35 @@ class AudioPlayerManager private constructor(private val context: Context) {
 
         player.play()
         ensureServiceStarted()
+        enrichTrackIfNeeded(track, index)
+    }
+
+    private fun enrichTrackIfNeeded(track: Track, index: Int) {
+        if (track.lyrics.isBlank() || track.bitrate.isBlank()) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val enriched = com.example.data.MetadataReader.extractFullMetadata(context, track)
+                    val cur = _currentTrack.value
+                    if (cur != null && cur.id == track.id) {
+                        _currentTrack.value = cur.copy(
+                            lyrics = if (enriched.lyrics.isNotBlank()) enriched.lyrics else cur.lyrics,
+                            bitrate = if (cur.bitrate.isBlank()) enriched.bitrate else cur.bitrate,
+                            sampleRate = if (cur.sampleRate.isBlank()) enriched.sampleRate else cur.sampleRate
+                        )
+                    }
+                    val currentPlaylist = _playlist.value.toMutableList()
+                    if (index in currentPlaylist.indices && currentPlaylist[index].id == track.id) {
+                        currentPlaylist[index] = enriched
+                        _playlist.value = currentPlaylist
+                    }
+                    if (enriched.lyrics.isNotBlank()) {
+                        com.example.data.TrackRepository.updateTrackLyrics(context, track.id, enriched.lyrics)
+                    }
+                } catch (e: Exception) {
+                    Log.d(TAG, "enrichTrackIfNeeded skipped: ${e.message}")
+                }
+            }
+        }
     }
 
     fun togglePlayPause() {
@@ -654,6 +659,28 @@ class AudioPlayerManager private constructor(private val context: Context) {
                 playTrackAtIndex(nextIdx)
             } else if (index < _currentIndex.value) {
                 _currentIndex.value = _currentIndex.value - 1
+            }
+        }
+    }
+
+    fun moveInQueue(fromIndex: Int, toIndex: Int) {
+        val currentList = _playlist.value.toMutableList()
+        if (fromIndex in currentList.indices && toIndex in currentList.indices && fromIndex != toIndex) {
+            val currIdx = _currentIndex.value
+            val track = currentList.removeAt(fromIndex)
+            currentList.add(toIndex, track)
+            _playlist.value = currentList
+            try {
+                exoPlayer?.moveMediaItem(fromIndex, toIndex)
+            } catch (e: Exception) {}
+
+            // Keep tracking of current playing index correctly
+            if (currIdx == fromIndex) {
+                _currentIndex.value = toIndex
+            } else if (fromIndex < currIdx && toIndex >= currIdx) {
+                _currentIndex.value = currIdx - 1
+            } else if (fromIndex > currIdx && toIndex <= currIdx) {
+                _currentIndex.value = currIdx + 1
             }
         }
     }

@@ -101,6 +101,9 @@ object MetadataReader {
 
         val lyricsResult = AudioLyricsExtractor.extractLyrics(context, track.contentUri, track.path.takeIf { it.isNotBlank() && !it.startsWith("content://") })
         var extractedLyrics = lyricsResult.lyrics ?: ""
+        if (extractedLyrics.isBlank() && track.path.isNotBlank()) {
+            extractedLyrics = searchSidecarLyrics(track.path)
+        }
         if (extractedLyrics.isNotBlank()) {
             extractedLyrics = cleanExtractedLyrics(extractedLyrics)
         }
@@ -168,14 +171,7 @@ object MetadataReader {
     private fun readFileWithCharsetDetection(file: File): String {
         return try {
             val bytes = file.readBytes()
-            // Check UTF-8 BOM
-            if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {
-                String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
-            } else if (bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) {
-                String(bytes, 2, bytes.size - 2, Charsets.UTF_16LE)
-            } else {
-                String(bytes, Charsets.UTF_8)
-            }
+            AudioLyricsExtractor.decodeTextSmart(bytes)
         } catch (e: Exception) {
             try {
                 file.readText(Charsets.ISO_8859_1)
@@ -242,7 +238,25 @@ object MetadataReader {
         // Eliminar caracteres nulos iniciales o finales si existían en los bytes binarios
         cleaned = cleaned.trim { it <= ' ' || it == '\u0000' }
         
+        // Corregir posible mojibake (doble codificación UTF-8 interpretada como Latin1)
+        cleaned = fixMojibakeIfPresent(cleaned)
+        
         return cleaned
+    }
+
+    private fun fixMojibakeIfPresent(text: String): String {
+        if (!text.contains("Ã")) return text
+        return try {
+            val bytes = text.toByteArray(Charsets.ISO_8859_1)
+            val candidate = String(bytes, Charsets.UTF_8)
+            if (!candidate.contains("\uFFFD") && candidate.length < text.length) {
+                candidate
+            } else {
+                text
+            }
+        } catch (e: Exception) {
+            text
+        }
     }
 
 

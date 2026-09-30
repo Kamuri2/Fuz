@@ -5,6 +5,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -139,49 +141,84 @@ fun LyricsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         if (parsedLyrics.isEmpty()) {
-            // Empty Lyrics Fallback Card
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    backgroundColor = Color(0x1AFFFFFF)
+            if (lyricsText.isNotBlank()) {
+                // Static / Unsynced Plain Text Lyrics Glass Card
+                val scrollState = rememberScrollState()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 24.dp),
+                    contentAlignment = Alignment.TopCenter
                 ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    GlassCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(scrollState),
+                        shape = RoundedCornerShape(20.dp),
+                        backgroundColor = Color(0x14FFFFFF),
+                        borderColor = Color.White.copy(alpha = 0.15f)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "No se encontraron letras integradas",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = GlassTextPrimary,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Puedes pegar letras en formato LRC o texto plano pulsando el botón de editar arriba.",
-                            fontSize = 13.sp,
-                            color = GlassTextMuted,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = { showEditSheet = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("Agregar Letras Manualmente", color = Color.Black, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = lyricsText,
+                                fontSize = 16.sp,
+                                lineHeight = 26.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = GlassTextPrimary,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Empty Lyrics Fallback Card
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        backgroundColor = Color(0x1AFFFFFF)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "No se encontraron letras integradas",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = GlassTextPrimary,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Puedes pegar letras en formato LRC o texto plano pulsando el botón de editar arriba.",
+                                fontSize = 13.sp,
+                                color = GlassTextMuted,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { showEditSheet = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("Agregar Letras Manualmente", color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }

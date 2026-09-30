@@ -44,6 +44,261 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.ArtistInfo
 import com.example.model.Track
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.graphics.Brush
+
+/**
+ * Spotify-style inline Artist Info Card rendered directly below the player controls.
+ * Replaces the old expandable bottom tab.
+ */
+@Composable
+fun ArtistInfoCard(
+    track: Track?,
+    artistInfo: ArtistInfo?,
+    language: String,
+    modifier: Modifier = Modifier
+) {
+    val uriHandler = LocalUriHandler.current
+    val artistName = track?.artist?.takeIf { it.isNotBlank() && it != "<unknown>" } ?: "Unknown Artist"
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+        shape = RoundedCornerShape(22.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Header: Hero Banner if image is available, otherwise stylized avatar row
+            if (artistInfo?.imageUrl != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                ) {
+                    AsyncImage(
+                        model = artistInfo.imageUrl,
+                        contentDescription = "Artist Banner",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color(0x771E1E1E),
+                                        Color(0xFF1E1E1E)
+                                    ),
+                                    startY = 50f
+                                )
+                            )
+                    )
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(18.dp)
+                    ) {
+                        Text(
+                            text = Translations.get(language, "about_artist").uppercase(),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = artistName,
+                            color = Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 22.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x22FFFFFF)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = Translations.get(language, "about_artist").uppercase(),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = artistName,
+                            color = Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 20.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            // Stats row (Followers, Origin)
+            val hasFollowers = !artistInfo?.followers.isNullOrBlank()
+            val hasOrigin = !artistInfo?.origin.isNullOrBlank()
+            if (hasFollowers || hasOrigin) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    if (hasFollowers) {
+                        Column {
+                            Text(
+                                text = artistInfo!!.followers!!,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                text = Translations.get(language, "followers"),
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    if (hasOrigin) {
+                        Column {
+                            Text(
+                                text = artistInfo!!.origin!!,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                text = Translations.get(language, "origin"),
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Biography
+            var isBioExpanded by remember { mutableStateOf(false) }
+            val rawBio = artistInfo?.bio
+            val bioText = if (!rawBio.isNullOrBlank()) rawBio else Translations.get(language, "no_info_available")
+
+            Text(
+                text = bioText,
+                color = Color.White.copy(alpha = 0.82f),
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                maxLines = if (isBioExpanded) Int.MAX_VALUE else 4,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 8.dp)
+                    .clickable { isBioExpanded = !isBioExpanded }
+            )
+
+            if (!rawBio.isNullOrBlank() && rawBio.length > 130) {
+                Text(
+                    text = if (isBioExpanded) (if (language.startsWith("Esp", ignoreCase = true)) "Mostrar menos" else "Show less") else (if (language.startsWith("Esp", ignoreCase = true)) "Leer más" else "Read more"),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .padding(horizontal = 18.dp, vertical = 2.dp)
+                        .clickable { isBioExpanded = !isBioExpanded }
+                )
+            }
+
+            // Social links
+            val hasSocials = !artistInfo?.website.isNullOrBlank() ||
+                    !artistInfo?.facebook.isNullOrBlank() ||
+                    !artistInfo?.twitter.isNullOrBlank() ||
+                    !artistInfo?.instagram.isNullOrBlank() ||
+                    !artistInfo?.spotify.isNullOrBlank() ||
+                    !artistInfo?.youtube.isNullOrBlank() ||
+                    !artistInfo?.appleMusic.isNullOrBlank()
+
+            if (hasSocials) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!artistInfo?.spotify.isNullOrBlank()) {
+                        IconButton(onClick = { uriHandler.openUri(formatUrl(artistInfo!!.spotify!!)) }) {
+                            Icon(SpotifyIcon, contentDescription = "Spotify", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    if (!artistInfo?.instagram.isNullOrBlank()) {
+                        IconButton(onClick = { uriHandler.openUri(formatUrl(artistInfo!!.instagram!!)) }) {
+                            Icon(InstagramIcon, contentDescription = "Instagram", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    if (!artistInfo?.youtube.isNullOrBlank()) {
+                        IconButton(onClick = { uriHandler.openUri(formatUrl(artistInfo!!.youtube!!)) }) {
+                            Icon(YouTubeIcon, contentDescription = "YouTube", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    if (!artistInfo?.appleMusic.isNullOrBlank()) {
+                        IconButton(onClick = { uriHandler.openUri(formatUrl(artistInfo!!.appleMusic!!)) }) {
+                            Icon(AppleMusicIcon, contentDescription = "Apple Music", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    if (!artistInfo?.twitter.isNullOrBlank()) {
+                        IconButton(onClick = { uriHandler.openUri(formatUrl(artistInfo!!.twitter!!)) }) {
+                            Icon(TwitterIcon, contentDescription = "Twitter", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    if (!artistInfo?.facebook.isNullOrBlank()) {
+                        IconButton(onClick = { uriHandler.openUri(formatUrl(artistInfo!!.facebook!!)) }) {
+                            Icon(FacebookIcon, contentDescription = "Facebook", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    if (!artistInfo?.website.isNullOrBlank()) {
+                        IconButton(onClick = { uriHandler.openUri(formatUrl(artistInfo!!.website!!)) }) {
+                            Icon(Icons.Default.Language, contentDescription = "Website", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+    }
+}
 
 @Composable
 fun ArtistInfoTab(

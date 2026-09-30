@@ -3,6 +3,8 @@ package com.example.ui.components
 import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,9 +15,12 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,11 +42,10 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * High-definition Player Album Art:
- * 1. Lee el artwork embebido a resolución original (NO usa MediaStore que downscalea a 512px).
- * 2. Size.ORIGINAL en Coil (sin downsampling).
- * 3. FilterQuality.High (escalado bicúbico cuando la fuente se muestra a gran tamaño en el reproductor).
- * 4. Caché persistente en disco (album_art_hd) para 0 I/O recurrente.
+ * High-definition Player Album Art con CERO flash entre canciones:
+ * 1. Comprueba inmediatamente en disco local si la carátula ya fue pre-extraída (0ms).
+ * 2. Si aún no está lista, mantiene la carátula anterior visible mediante Crossfade(300ms).
+ * 3. Nunca muestra placeholders en blanco o iconos parpadeantes durante el cambio de canción.
  */
 @Composable
 fun PlayerAlbumArt(
@@ -52,34 +56,49 @@ fun PlayerAlbumArt(
     val context = LocalContext.current
     val extractor = remember { AlbumArtExtractor(context) }
 
-    val artFile by produceState<File?>(initialValue = null, key1 = track.id) {
-        value = withContext(Dispatchers.IO) {
-            extractor.getHighResArt(track)
+    // 1. Revisión síncrona inmediata en caché de disco (0 ms de latencia)
+    val initialFile = remember(track.id) { extractor.getExistingArtFile(track) }
+
+    val artFile by produceState<File?>(initialValue = initialFile, key1 = track.id) {
+        if (value == null) {
+            value = withContext(Dispatchers.IO) {
+                extractor.getHighResArt(track)
+            }
         }
     }
 
-    val model: Any? = artFile ?: track.albumArtUri ?: if (track.contentUri != Uri.EMPTY) track.contentUri else null
+    val currentModel: Any? = artFile ?: track.albumArtUri ?: if (track.contentUri != Uri.EMPTY) track.contentUri else null
 
-    if (model != null) {
-        SubcomposeAsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(model)
-                .size(CoilSize.ORIGINAL)
-                .crossfade(true)
-                .build(),
-            contentDescription = "Portada",
-            contentScale = contentScale,
-            filterQuality = FilterQuality.High,
-            modifier = modifier,
-            error = {
-                FallbackOrExtractImage(track = track, modifier = Modifier.fillMaxSize(), contentScale = contentScale)
-            },
-            loading = {
-                FallbackMusicIcon(modifier = Modifier.fillMaxSize())
-            }
-        )
-    } else {
-        FallbackOrExtractImage(track = track, modifier = modifier, contentScale = contentScale)
+    // Mantiene la imagen previa visible para eliminar por completo el flash entre canciones
+    var displayedModel by remember { mutableStateOf<Any?>(currentModel) }
+    LaunchedEffect(currentModel) {
+        if (currentModel != null) {
+            displayedModel = currentModel
+        }
+    }
+
+    val modelToUse = currentModel ?: displayedModel
+
+    Crossfade(
+        targetState = modelToUse,
+        animationSpec = tween(300),
+        modifier = modifier
+    ) { model ->
+        if (model != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(model)
+                    .size(CoilSize.ORIGINAL)
+                    .crossfade(300)
+                    .build(),
+                contentDescription = "Portada",
+                contentScale = contentScale,
+                filterQuality = FilterQuality.High,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            FallbackMusicIcon(modifier = Modifier.fillMaxSize())
+        }
     }
 }
 
@@ -95,9 +114,13 @@ fun PlayerAlbumArt(
     val context = LocalContext.current
     val extractor = remember { AlbumArtExtractor(context) }
 
-    val artFile by produceState<File?>(initialValue = null, key1 = audioFile.absolutePath) {
-        value = withContext(Dispatchers.IO) {
-            extractor.getHighResArt(audioFile)
+    val initialFile = remember(audioFile.absolutePath) { extractor.getExistingArtFile(audioFile) }
+
+    val artFile by produceState<File?>(initialValue = initialFile, key1 = audioFile.absolutePath) {
+        if (value == null) {
+            value = withContext(Dispatchers.IO) {
+                extractor.getHighResArt(audioFile)
+            }
         }
     }
 
@@ -107,7 +130,7 @@ fun PlayerAlbumArt(
         model = ImageRequest.Builder(context)
             .data(model)
             .size(CoilSize.ORIGINAL)
-            .crossfade(true)
+            .crossfade(300)
             .build(),
         contentDescription = "Portada",
         contentScale = contentScale,
@@ -147,11 +170,9 @@ fun AlbumArt(
 }
 
 /**
- * Complete TrackImage combining:
- * 1. MediaStore album art URI with Coil async loading and crossfade
- * 2. Downsampled off-main-thread extraction via MediaMetadataRetriever/JAudioTagger
- * 3. Two-level caching (LRU Memory + Disk cache)
- * 4. Graceful placeholder fallback
+ * TrackImage optimizado:
+ * Lee de forma inmediata la carátula pre-extraída de album_art_hd o MediaStore URI
+ * sin llamadas repetitivas o ruidosas a MediaMetadataRetriever.
  */
 @Composable
 fun TrackImage(
@@ -160,25 +181,25 @@ fun TrackImage(
     contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
+    val extractor = remember { AlbumArtExtractor(context) }
+    val artFile = remember(track.id) { extractor.getExistingArtFile(track) }
+    val model: Any? = artFile ?: track.albumArtUri ?: if (track.contentUri != Uri.EMPTY) track.contentUri else null
 
-    if (track.albumArtUri != null) {
+    if (model != null) {
         SubcomposeAsyncImage(
             model = ImageRequest.Builder(context)
-                .data(track.albumArtUri)
-                .crossfade(true)
+                .data(model)
+                .crossfade(200)
                 .build(),
             contentDescription = track.title,
             contentScale = contentScale,
             modifier = modifier,
             error = {
-                FallbackOrExtractImage(track = track, modifier = Modifier.fillMaxSize(), contentScale = contentScale)
-            },
-            loading = {
                 FallbackMusicIcon(modifier = Modifier.fillMaxSize())
             }
         )
     } else {
-        FallbackOrExtractImage(track = track, modifier = modifier, contentScale = contentScale)
+        FallbackMusicIcon(modifier = modifier)
     }
 }
 

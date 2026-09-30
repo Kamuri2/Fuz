@@ -190,9 +190,12 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         LaunchedEffect(cachedTracks) {
             if (cachedTracks.isNotEmpty()) {
                 loadedTracks = cachedTracks
+                com.example.data.ArtPreExtractor.startPreExtraction(context, cachedTracks)
                 if (playerManager.playlist.value.isEmpty()) {
                     playerManager.setQueue(cachedTracks, 0, false)
                 }
+            } else {
+                com.example.data.ArtPreExtractor.startPreExtraction(context)
             }
         }
 
@@ -408,14 +411,36 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         onPlayAlbum = { albumTracks, idx -> 
                             playerManager.setShuffle(false)
                             playerManager.setQueue(albumTracks, idx)
-                        }
+                        },
+                        onSetPlayNext = { track -> playerManager.setPlayNext(track) },
+                        onAddToPlaylist = { playlistId, track ->
+                            coroutineScope.launch {
+                                socialRepository.addTrackToPlaylist(playlistId, track.id)
+                                val p = dbPlaylists.find { it.playlistId == playlistId }
+                                if (p != null) {
+                                    playerManager.addToPlaylist(p.name, track)
+                                }
+                            }
+                        },
+                        onCreatePlaylistAndAdd = { name, track ->
+                            coroutineScope.launch {
+                                val newId = socialRepository.createPlaylist(name)
+                                socialRepository.addTrackToPlaylist(newId, track.id)
+                                playerManager.addToPlaylist(name, track)
+                            }
+                        },
+                        playlists = dbPlaylists
                     )
 
                     NavigationScreen.ARTISTS -> ArtistsScreen(
                         settings = appSettings,
                         tracks = loadedTracks,
                         initialArtistName = initialArtist,
-                        onPlayArtist = { artistTracks, idx -> playerManager.setQueue(artistTracks, idx) }
+                        onPlayArtist = { artistTracks, idx -> playerManager.setQueue(artistTracks, idx) },
+                        onNavigateToAlbum = { albumName ->
+                            initialAlbum = albumName
+                            currentScreen = NavigationScreen.ALBUMS
+                        }
                     )
 
 
@@ -464,6 +489,24 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                             playerManager.setQueue(albumTracks, idx)
                         },
                         onDismissOverlay = { initialAlbum = null },
+                        onSetPlayNext = { track -> playerManager.setPlayNext(track) },
+                        onAddToPlaylist = { playlistId, track ->
+                            coroutineScope.launch {
+                                socialRepository.addTrackToPlaylist(playlistId, track.id)
+                                val p = dbPlaylists.find { it.playlistId == playlistId }
+                                if (p != null) {
+                                    playerManager.addToPlaylist(p.name, track)
+                                }
+                            }
+                        },
+                        onCreatePlaylistAndAdd = { name, track ->
+                            coroutineScope.launch {
+                                val newId = socialRepository.createPlaylist(name)
+                                socialRepository.addTrackToPlaylist(newId, track.id)
+                                playerManager.addToPlaylist(name, track)
+                            }
+                        },
+                        playlists = dbPlaylists,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -475,6 +518,11 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         initialArtistName = initialArtist,
                         onPlayArtist = { artistTracks, idx -> playerManager.setQueue(artistTracks, idx) },
                         onDismissOverlay = { initialArtist = null },
+                        onNavigateToAlbum = { albumName ->
+                            initialArtist = null
+                            initialAlbum = albumName
+                            currentScreen = NavigationScreen.ALBUMS
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -553,6 +601,7 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                 },
                 onRemoveFromQueue = { idx -> playerManager.removeFromQueue(idx) },
                 onSetPlayNext = { track -> playerManager.setPlayNext(track) },
+                onMoveInQueue = { from, to -> playerManager.moveInQueue(from, to) },
                 language = appSettings.appLanguage
             )
         }

@@ -89,12 +89,20 @@ import com.example.data.LrcParser
 import com.example.model.Track
 import com.example.player.LoopMode
 import com.example.ui.components.LiquidGlassBackground
+import com.example.ui.components.ArtistInfoCard
 import com.example.ui.components.ArtistInfoTab
 import com.example.ui.components.WaveformSeekBar
 import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextSecondary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private fun formatDuration(ms: Long): String {
+    val totalSecs = ms / 1000
+    val mins = totalSecs / 60
+    val secs = totalSecs % 60
+    return String.format("%d:%02d", mins, secs)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -543,19 +551,14 @@ fun PlayerScreen(
             }
         } else {
             // ==================== PORTRAIT MODE ====================
+            val portraitScrollState = rememberScrollState()
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures { change, dragAmount ->
-                            if (dragAmount > 35f) {
-                                onBack()
-                            }
-                        }
-                    }
-                    .padding(top = 8.dp, bottom = 54.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween
+                    .verticalScroll(portraitScrollState)
+                    .padding(top = 8.dp, bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Top Header with Swipe Down Handle
                 Column(
@@ -599,7 +602,7 @@ fun PlayerScreen(
                 }
 
                 // Breathing space
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 AnimatedContent(
                     targetState = currentTrack?.id ?: 0L,
@@ -614,23 +617,23 @@ fun PlayerScreen(
                         }
                     },
                     label = "Track Transition",
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth()
                 ) { _ ->
                     val targetTrack = currentTrack
                     Crossfade(
                         targetState = showLyricsMode,
                         label = "LyricsModeToggle",
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxWidth()
                     ) { isLyricsMode ->
                         if (!isLyricsMode) {
                             // ==================== ALBUM ART MODE ====================
                             // 1:1 Square Album Art Area with Action Buttons overlaid at bottom
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.97f)
+                                        .fillMaxWidth(0.95f)
                                         .aspectRatio(1f)
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(16.dp))
                                         .background(Color(0x1AFFFFFF))
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -723,14 +726,14 @@ fun PlayerScreen(
                         // Cover is hidden! Full lyrics view occupies the center stage
                         Column(
                             modifier = Modifier
-                                .fillMaxSize(),
+                                .fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .fillMaxWidth(0.95f)
+                                    .height(380.dp)
+                                    .clip(RoundedCornerShape(16.dp))
                                     .background(Color(0x14FFFFFF))
                             ) {
                                 LyricsContent(
@@ -949,18 +952,42 @@ fun PlayerScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(34.dp))
-}
-            }
-            
-            // Bottom Artist Info Tab
-            if (!isLandscape) {
-                ArtistInfoTab(
+                Spacer(modifier = Modifier.height(28.dp))
+
+                // ==================== SPOTIFY-STYLE ABOUT THE ARTIST SECTION ====================
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = com.example.ui.Translations.get(settings.appLanguage, "about_artist"),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                ArtistInfoCard(
                     track = currentTrack,
                     artistInfo = artistInfo,
                     language = settings.appLanguage,
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
                 )
+
+                Spacer(modifier = Modifier.height(64.dp))
             }
         }
         }
@@ -1132,6 +1159,7 @@ fun PlayerScreen(
         }
     }
 }
+}
 
 @Composable
 fun LiveSyncedLyricSnippet(
@@ -1294,11 +1322,4 @@ fun LyricsContent(
             }
         }
     }
-}
-
-private fun formatDuration(ms: Long): String {
-    val totalSecs = ms / 1000
-    val mins = totalSecs / 60
-    val secs = totalSecs % 60
-    return String.format("%d:%02d", mins, secs)
 }

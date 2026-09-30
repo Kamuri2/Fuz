@@ -110,6 +110,7 @@ fun ArtistsScreen(
     initialArtistName: String? = null,
     onPlayArtist: (List<Track>, Int) -> Unit,
     onDismissOverlay: (() -> Unit)? = null,
+    onNavigateToAlbum: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val artistGroups = remember(tracks) {
@@ -143,7 +144,9 @@ fun ArtistsScreen(
             onPlayTrack = { index -> onPlayArtist(artistTracks, index) },
             onShuffleAll = { onPlayArtist(artistTracks.shuffled(), 0) },
             onShowAbout = { showAboutDialog = true },
-            onPlayQueue = { queue, index -> onPlayArtist(queue, index) }
+            onPlayQueue = { queue, index -> onPlayArtist(queue, index) },
+            onNavigateToAlbum = onNavigateToAlbum,
+            settings = settings
         )
         
         if (showAboutDialog) {
@@ -376,16 +379,21 @@ fun ArtistsScreen(
 fun ArtistDetailScreen(
     artistName: String,
     tracks: List<Track>,
+    settings: com.example.model.AppSettings = com.example.model.AppSettings(),
     initialArtistName: String? = null,
     onBack: () -> Unit,
     onPlayTrack: (Int) -> Unit,
     onShuffleAll: () -> Unit,
     onShowAbout: () -> Unit,
-    onPlayQueue: ((List<Track>, Int) -> Unit)? = null
+    onPlayQueue: ((List<Track>, Int) -> Unit)? = null,
+    onNavigateToAlbum: ((String) -> Unit)? = null
 ) {
     var artistInfo by remember { mutableStateOf<ArtistInfo?>(null) }
     var viewingAlbumName by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val primaryColor = settings.selectedTheme.primaryColor
+    val isLightPrimary = (0.299f * primaryColor.red + 0.587f * primaryColor.green + 0.114f * primaryColor.blue) > 0.5f
+    val playIconTint = if (isLightPrimary) Color.Black else Color.White
     
     LaunchedEffect(artistName) {
         artistInfo = ArtistInfoFetcher.fetchArtistInfo(artistName)
@@ -573,19 +581,38 @@ fun ArtistDetailScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = { onPlayTrack(0) },
-                        modifier = Modifier.size(56.dp).background(Color.White, CircleShape)
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape)
+                            .background(primaryColor)
+                            .clickable { onPlayTrack(0) },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.Black, modifier = Modifier.size(32.dp))
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Play",
+                            tint = playIconTint,
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
-                    Spacer(modifier = Modifier.width(20.dp))
-                    IconButton(onClick = onShuffleAll) {
-                        Icon(Icons.Default.Shuffle, contentDescription = "Shuffle", tint = GlassTextMuted, modifier = Modifier.size(28.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    IconButton(
+                        onClick = onShuffleAll,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Shuffle,
+                            contentDescription = "Shuffle",
+                            tint = primaryColor,
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
                 }
                 
@@ -617,7 +644,11 @@ fun ArtistDetailScreen(
                                 modifier = Modifier
                                     .width(140.dp)
                                     .clickable {
-                                        viewingAlbumName = albumName
+                                        if (onNavigateToAlbum != null) {
+                                            onNavigateToAlbum(albumName)
+                                        } else {
+                                            viewingAlbumName = albumName
+                                        }
                                     },
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
