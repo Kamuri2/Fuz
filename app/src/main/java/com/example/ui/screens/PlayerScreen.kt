@@ -16,9 +16,9 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -61,9 +62,12 @@ import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbDownOffAlt
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
+import androidx.compose.foundation.BorderStroke
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -76,7 +80,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -148,11 +155,17 @@ fun PlayerScreen(
 
     var showAddToPlaylistModal by remember { mutableStateOf(false) }
     
-    var artistInfo by remember { mutableStateOf<com.example.data.ArtistInfo?>(null) }
-    LaunchedEffect(currentTrack?.artist) {
-        artistInfo = null
-        currentTrack?.artist?.let { artistName ->
-            artistInfo = com.example.data.ArtistInfoFetcher.fetchArtistInfo(artistName)
+    var artistInfo by remember(currentTrack?.artist) {
+        mutableStateOf(currentTrack?.artist?.let { com.example.data.ArtistInfoFetcher.getCachedArtistInfo(it) })
+    }
+    LaunchedEffect(currentTrack?.id, currentTrack?.artist) {
+        currentTrack?.let { track ->
+            val cached = com.example.data.ArtistInfoFetcher.getCachedArtistInfo(track.artist)
+            if (cached != null) {
+                artistInfo = cached
+            }
+            val fetched = com.example.data.ArtistInfoFetcher.fetchArtistInfo(track.artist, track.title)
+            artistInfo = fetched
         }
     }
 
@@ -220,7 +233,7 @@ fun PlayerScreen(
                     // Artwork Cover
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.92f)
+                            .fillMaxWidth(0.91f)
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color(0x1AFFFFFF)),
@@ -551,58 +564,76 @@ fun PlayerScreen(
             }
         } else {
             // ==================== PORTRAIT MODE ====================
-            val portraitScrollState = rememberScrollState()
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val totalScreenHeight = maxHeight
+                val totalScreenWidth = maxWidth
+                val portraitScrollState = rememberScrollState()
+                val density = LocalDensity.current
+                var playerContentHeightPx by remember { mutableIntStateOf(0) }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(portraitScrollState)
-                    .padding(top = 8.dp, bottom = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Top Header with Swipe Down Handle
+                // 5% top shift from cover top downwards
+                val topShift = totalScreenHeight * 0.05f
+                // 3% shift specifically for the progress bar and playback buttons section
+                val controlsShift = totalScreenHeight * 0.03f
+                val lyricsContainerHeight = (totalScreenWidth * 0.92f) + 76.dp
+
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 0.dp)
-                        .clickable { onBack() }
+                        .fillMaxSize()
+                        .verticalScroll(portraitScrollState)
+                        .padding(top = 4.dp, bottom = 48.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .width(44.dp)
-                            .height(4.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.45f))
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 2.dp)
-                            .clickable { onBack() },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                            .onSizeChanged { playerContentHeightPx = it.height },
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Deslizar para cerrar",
-                            tint = GlassTextMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = com.example.ui.Translations.get(settings.appLanguage, "playing_now"),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = GlassTextMuted,
-                            letterSpacing = 1.5.sp
-                        )
-                    }
-                }
+                        // Top Header with Swipe Down Handle
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(44.dp)
+                                    .height(4.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.45f))
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null
+                                    ) { onBack() }
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = com.example.ui.Translations.get(settings.appLanguage, "close"),
+                                    tint = GlassTextMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = com.example.ui.Translations.get(settings.appLanguage, "playing_now"),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = GlassTextMuted,
+                                    letterSpacing = 1.5.sp
+                                )
+                            }
+                        }
 
-                // Breathing space
-                Spacer(modifier = Modifier.height(6.dp))
+                        // Breathing space down to cover lowered by 5% of screen height
+                        Spacer(modifier = Modifier.height(10.dp + topShift))
 
                 AnimatedContent(
                     targetState = currentTrack?.id ?: 0L,
@@ -631,9 +662,9 @@ fun PlayerScreen(
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.95f)
+                                        .fillMaxWidth(0.92f)
                                         .aspectRatio(1f)
-                                        .clip(RoundedCornerShape(16.dp))
+                                        .clip(RoundedCornerShape(18.dp))
                                         .background(Color(0x1AFFFFFF))
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -722,147 +753,202 @@ fun PlayerScreen(
                         }
                         }
                     } else {
-                        // ==================== LYRICS VIEW MODE ====================
-                        // Cover is hidden! Full lyrics view occupies the center stage
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
+                        // ==================== EXPANDED LYRICS VIEW MODE ====================
+                        // Encompasses the entire red marked area down to right above the seekbar
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(0.95f)
-                                    .height(380.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(Color(0x14FFFFFF))
+                                    .fillMaxWidth(0.92f)
+                                    .height(lyricsContainerHeight)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(Color(0x18FFFFFF))
                             ) {
+                                // Full-height scrolling lyrics
                                 LyricsContent(
                                     parsedLyrics = parsedLyrics,
                                     rawLyrics = targetTrack?.lyrics ?: "",
                                     currentPositionMs = currentPositionMs,
                                     language = settings.appLanguage,
                                     onSeek = onSeek,
-                                    modifier = Modifier.fillMaxSize().padding(8.dp)
-                                )
-                            }
-
-                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-// Action Icons Row below lyrics so user can toggle back anytime
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 4.dp, bottom = 2.dp, start = 10.dp, end = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(onClick = onFavoriteToggle, modifier = Modifier.testTag("player_favorite_btn")) {
-                                    Icon(
-                                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = "Favorite",
-                                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-
-                                IconButton(onClick = onDislikeToggle) {
-                                    Icon(
-                                        imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
-                                        contentDescription = "Dislike",
-                                        tint = if (isDisliked) Color(0xFFEF4444) else Color.White.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-
-                                IconButton(onClick = { showAddToPlaylistModal = true }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Add to playlist",
-                                        tint = Color.White.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
-
-                                // Active Lyrics Mic Icon
-                                Box(
                                     modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
-                                        .clickable { showLyricsMode = !showLyricsMode },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Mic,
-                                        contentDescription = "Lyrics",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
+                                        .fillMaxSize()
+                                        .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 72.dp)
+                                )
 
-                                IconButton(onClick = onOpenQueue, modifier = Modifier.testTag("player_queue_btn")) {
-                                    Icon(
-                                        imageVector = Icons.Default.QueueMusic,
-                                        contentDescription = "Queue",
-                                        tint = Color.White.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(22.dp)
-                                    )
+                                // Action Icons and Song Info Row overlaid at the bottom of the expanded lyrics card
+                                Column(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .background(
+                                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                                colors = listOf(
+                                                    Color.Transparent,
+                                                    Color.Black.copy(alpha = 0.85f),
+                                                    Color.Black.copy(alpha = 0.96f)
+                                                )
+                                            )
+                                        )
+                                        .padding(top = 10.dp, bottom = 8.dp, start = 12.dp, end = 12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = targetTrack?.title ?: "",
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = targetTrack?.artist ?: "",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Normal,
+                                                color = GlassTextSecondary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        IconButton(onClick = onFavoriteToggle, modifier = Modifier.testTag("player_favorite_btn")) {
+                                            Icon(
+                                                imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                                contentDescription = "Favorite",
+                                                tint = if (isFavorite) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+
+                                        IconButton(onClick = onDislikeToggle) {
+                                            Icon(
+                                                imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Default.ThumbDownOffAlt,
+                                                contentDescription = "Dislike",
+                                                tint = if (isDisliked) Color(0xFFEF4444) else Color.White.copy(alpha = 0.85f),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+
+                                        IconButton(onClick = { showAddToPlaylistModal = true }) {
+                                            Icon(
+                                                imageVector = Icons.Default.Add,
+                                                contentDescription = "Add to playlist",
+                                                tint = Color.White.copy(alpha = 0.85f),
+                                                modifier = Modifier.size(26.dp)
+                                            )
+                                        }
+
+                                        // Active Lyrics Mic Icon
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                                                .clickable { showLyricsMode = !showLyricsMode },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Mic,
+                                                contentDescription = "Lyrics",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        IconButton(onClick = onOpenQueue, modifier = Modifier.testTag("player_queue_btn")) {
+                                            Icon(
+                                                imageVector = Icons.Default.QueueMusic,
+                                                contentDescription = "Queue",
+                                                tint = Color.White.copy(alpha = 0.85f),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
-                    } }
-// end of if/else isLyricsMode
-                    } // end of Crossfade block
+                    }
                 }
+            }
 
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                // Compact Live Single-Line Lyric Snippet
+                // When in album art mode, show single line snippet and centered title/artist
                 if (!showLyricsMode) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
+                    val hasLyrics = parsedLyrics.isNotEmpty() || (currentTrack?.lyrics?.isNotBlank() == true)
+
+                    // Lower the green marked section so the lyrics margin starts at the red box position
+                    val lyricsSectionTopMargin = (totalScreenHeight * 0.045f).coerceAtLeast(36.dp)
+                    Spacer(modifier = Modifier.height(lyricsSectionTopMargin))
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
                     ) {
-                        LiveSyncedLyricSnippet(
-                            parsedLyrics = parsedLyrics,
-                            rawLyrics = currentTrack?.lyrics ?: "",
-                            currentPositionMs = currentPositionMs,
-                            onClick = { showLyricsMode = true },
-                            modifier = Modifier.fillMaxWidth()
+                        // Constant snippet slot (24.dp) so Title and Artist never shift whether song has lyrics or not
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (hasLyrics) {
+                                LiveSyncedLyricSnippet(
+                                    parsedLyrics = parsedLyrics,
+                                    rawLyrics = currentTrack?.lyrics ?: "",
+                                    currentPositionMs = currentPositionMs,
+                                    onClick = { showLyricsMode = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = currentTrack?.title ?: "",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        Text(
+                            text = currentTrack?.artist ?: "",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = GlassTextSecondary,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(14.dp + controlsShift))
                 } else {
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(14.dp + controlsShift))
                 }
-
-                // Title and Artist Centered
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 2.dp)
-                ) {
-                    Text(
-                        text = currentTrack?.title ?: "",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = currentTrack?.artist ?: "",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = GlassTextSecondary,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(28.dp))
 
                 // Waveform Progress Bar with Audio Soundwaves
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
                     WaveformSeekBar(
                         progress = currentProgress,
                         onProgressChange = { fraction ->
@@ -877,7 +963,7 @@ fun PlayerScreen(
                         isPlaying = isPlaying,
                         trackId = currentTrack?.id ?: 0L,
                         activeColor = MaterialTheme.colorScheme.primary,
-                        height = 46.dp,
+                        height = 44.dp,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -892,12 +978,14 @@ fun PlayerScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Main Playback Controls
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onShuffleToggle) {
@@ -951,46 +1039,36 @@ fun PlayerScreen(
                         )
                     }
                 }
+            } // End of Column with player content
 
-                Spacer(modifier = Modifier.height(28.dp))
+                // Target peek: ~32dp peeks out at the bottom edge, almost hidden until scrolled ("casi oculto en esa pantalla")
+                val playerContentHeightDp = with(density) { playerContentHeightPx.toDp() }
+                val targetPeek = 32.dp
+                val spaceToArtistCard = if (playerContentHeightDp > 0.dp) {
+                    (totalScreenHeight - playerContentHeightDp - targetPeek).coerceAtLeast(24.dp)
+                } else {
+                    (totalScreenHeight - (totalScreenWidth * 0.92f + 260.dp) - targetPeek).coerceAtLeast(24.dp)
+                }
 
-                // ==================== SPOTIFY-STYLE ABOUT THE ARTIST SECTION ====================
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = com.example.ui.Translations.get(settings.appLanguage, "about_artist"),
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                Spacer(modifier = Modifier.height(spaceToArtistCard))
+
+                // Artist Info Card peeking at the bottom (~32dp), almost hidden until scrolled
+                if (currentTrack != null) {
+                    ArtistInfoCard(
+                        track = currentTrack,
+                        artistInfo = artistInfo,
+                        language = settings.appLanguage,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                ArtistInfoCard(
-                    track = currentTrack,
-                    artistInfo = artistInfo,
-                    language = settings.appLanguage,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp)
-                )
-
-                Spacer(modifier = Modifier.height(64.dp))
+                Spacer(modifier = Modifier.height(56.dp))
             }
         }
-        }
+    }
+}
 
         // Modal to add song to custom playlists
         if (showAddToPlaylistModal) {
@@ -1159,7 +1237,6 @@ fun PlayerScreen(
         }
     }
 }
-}
 
 @Composable
 fun LiveSyncedLyricSnippet(
@@ -1209,8 +1286,8 @@ fun LiveSyncedLyricSnippet(
             Text(
                 text = targetLine,
                 fontSize = 13.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.90f),
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

@@ -164,11 +164,13 @@ class AlbumArtExtractor(private val context: Context) {
      * Extrae los bytes puros sin downsamplear usando JAudioTagger -> MediaMetadataRetriever -> Sidecar images.
      */
     private fun extractOriginalArtworkBytes(audioFile: File): ByteArray? {
+        var fileTagChecked = false
         // 1. JAudioTagger (mantiene resolución nativa de etiquetas ID3 APIC / FLAC PICTURE / MP4 covr)
         try {
             val audio = AudioFileIO.read(audioFile)
             val tag = audio.tag
             if (tag != null) {
+                fileTagChecked = true
                 val pictures = tag.artworkList
                 if (!pictures.isNullOrEmpty()) {
                     val best = pictures
@@ -201,20 +203,22 @@ class AlbumArtExtractor(private val context: Context) {
             Log.d("AlbumArtExtractor", "JAudioTagger no encontró arte embebido: ${e.message}")
         }
 
-        // 2. MediaMetadataRetriever nativo a resolución completa
-        try {
-            val mmr = MediaMetadataRetriever()
+        // 2. MediaMetadataRetriever nativo a resolución completa (sólo si los tags no pudieron ser analizados)
+        if (!fileTagChecked) {
             try {
-                mmr.setDataSource(audioFile.absolutePath)
-                val rawBytes = mmr.embeddedPicture
-                if (rawBytes != null && rawBytes.isNotEmpty()) {
-                    return rawBytes
+                val mmr = MediaMetadataRetriever()
+                try {
+                    mmr.setDataSource(audioFile.absolutePath)
+                    val rawBytes = mmr.embeddedPicture
+                    if (rawBytes != null && rawBytes.isNotEmpty()) {
+                        return rawBytes
+                    }
+                } finally {
+                    try { mmr.release() } catch (ignored: Exception) {}
                 }
-            } finally {
-                try { mmr.release() } catch (ignored: Exception) {}
+            } catch (e: Exception) {
+                Log.d("AlbumArtExtractor", "MMR falló para ${audioFile.name}: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.d("AlbumArtExtractor", "MMR falló para ${audioFile.name}: ${e.message}")
         }
 
         // 3. Sidecar cover files en el mismo directorio (cover.jpg, folder.jpg, album.jpg, etc.)

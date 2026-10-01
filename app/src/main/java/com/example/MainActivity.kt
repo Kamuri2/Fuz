@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         com.example.data.ArtistImageRepository.init(this)
+        com.example.data.ArtistInfoFetcher.init(this)
         com.example.data.TrackRepository.init(this)
         enableEdgeToEdge()
 

@@ -97,6 +97,19 @@ object ArtworkExtractor {
         } catch (_: Exception) {}
 
         // 2. Try JAudioTagger / Vorbis / Sidecar extraction directly (pure Kotlin/Java, no JNI errors)
+        var fileTagChecked = false
+        if (track.path.isNotBlank()) {
+            try {
+                val file = File(track.path)
+                if (file.exists() && file.canRead()) {
+                    val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+                    if (audioFile.tag != null) {
+                        fileTagChecked = true
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
         val rawBytes = extractArtworkBytes(context, track)
         if (rawBytes != null && rawBytes.isNotEmpty()) {
             val bitmap = decodeSampledBitmapFromByteArray(rawBytes, targetDim)
@@ -106,16 +119,18 @@ object ArtworkExtractor {
             }
         }
 
-        // 3. Fallback to MediaMetadataRetriever once if JAudioTagger could not read
-        if (track.contentUri != Uri.EMPTY) {
-            getAlbumArtDownsampled(context, track.contentUri, targetDim)?.let { bitmap ->
-                if (key.isNotBlank()) cache.put(key, bitmap)
-                return bitmap
-            }
-        } else if (track.path.isNotBlank()) {
-            getAlbumArtDownsampled(track.path, targetDim)?.let { bitmap ->
-                if (key.isNotBlank()) cache.put(key, bitmap)
-                return bitmap
+        // 3. Fallback to MediaMetadataRetriever only if file tags could not be read
+        if (!fileTagChecked) {
+            if (track.contentUri != Uri.EMPTY) {
+                getAlbumArtDownsampled(context, track.contentUri, targetDim)?.let { bitmap ->
+                    if (key.isNotBlank()) cache.put(key, bitmap)
+                    return bitmap
+                }
+            } else if (track.path.isNotBlank()) {
+                getAlbumArtDownsampled(track.path, targetDim)?.let { bitmap ->
+                    if (key.isNotBlank()) cache.put(key, bitmap)
+                    return bitmap
+                }
             }
         }
 

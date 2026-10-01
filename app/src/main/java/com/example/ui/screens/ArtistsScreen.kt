@@ -388,7 +388,7 @@ fun ArtistDetailScreen(
     onPlayQueue: ((List<Track>, Int) -> Unit)? = null,
     onNavigateToAlbum: ((String) -> Unit)? = null
 ) {
-    var artistInfo by remember { mutableStateOf<ArtistInfo?>(null) }
+    var artistInfo by remember(artistName) { mutableStateOf<ArtistInfo?>(ArtistInfoFetcher.getCachedArtistInfo(artistName)) }
     var viewingAlbumName by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val primaryColor = settings.selectedTheme.primaryColor
@@ -396,6 +396,10 @@ fun ArtistDetailScreen(
     val playIconTint = if (isLightPrimary) Color.Black else Color.White
     
     LaunchedEffect(artistName) {
+        val cached = ArtistInfoFetcher.getCachedArtistInfo(artistName)
+        if (cached != null) {
+            artistInfo = cached
+        }
         artistInfo = ArtistInfoFetcher.fetchArtistInfo(artistName)
     }
 
@@ -771,9 +775,13 @@ fun ArtistAboutScreen(
     artistName: String,
     onBack: () -> Unit
 ) {
-    var artistInfo by remember { mutableStateOf<ArtistInfo?>(null) }
+    var artistInfo by remember(artistName) { mutableStateOf<ArtistInfo?>(ArtistInfoFetcher.getCachedArtistInfo(artistName)) }
     
     LaunchedEffect(artistName) {
+        val cached = ArtistInfoFetcher.getCachedArtistInfo(artistName)
+        if (cached != null) {
+            artistInfo = cached
+        }
         artistInfo = ArtistInfoFetcher.fetchArtistInfo(artistName)
     }
 

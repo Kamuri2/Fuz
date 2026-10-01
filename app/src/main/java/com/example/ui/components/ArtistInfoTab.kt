@@ -65,10 +65,10 @@ fun ArtistInfoCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp)),
+            .clip(RoundedCornerShape(20.dp)),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
-        shape = RoundedCornerShape(22.dp)
+        shape = RoundedCornerShape(20.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()
@@ -106,14 +106,6 @@ fun ArtistInfoCard(
                             .padding(18.dp)
                     ) {
                         Text(
-                            text = Translations.get(language, "about_artist").uppercase(),
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
-                        )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
                             text = artistName,
                             color = Color.White,
                             fontWeight = FontWeight.Black,
@@ -146,14 +138,6 @@ fun ArtistInfoCard(
                     }
                     Spacer(modifier = Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = Translations.get(language, "about_artist").uppercase(),
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = artistName,
                             color = Color.White,
