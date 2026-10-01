@@ -57,22 +57,13 @@ object ArtistInfoFetcher {
         if (rawArtistName.isNullOrBlank()) return null
         val clean = rawArtistName.trim()
         val norm = clean.lowercase()
-        cache[clean]?.let { return it }
-        cache[norm]?.let { return it }
-
-        prefs?.getString(clean, null)?.let { json ->
-            fromJson(json)?.let {
-                cache[clean] = it
-                cache[norm] = it
-                return it
-            }
-        }
-        prefs?.getString(norm, null)?.let { json ->
-            fromJson(json)?.let {
-                cache[clean] = it
-                cache[norm] = it
-                return it
-            }
+        val cached = cache[clean] ?: cache[norm] ?: prefs?.getString(clean, null)?.let { fromJson(it) } ?: prefs?.getString(norm, null)?.let { fromJson(it) }
+        if (cached != null) {
+            val safeBio = if (cached.bio != null && isNonMusicDefinition(cached.bio)) null else cached.bio
+            val sanitized = if (safeBio != cached.bio) cached.copy(bio = safeBio) else cached
+            cache[clean] = sanitized
+            cache[norm] = sanitized
+            return sanitized
         }
         return null
     }
@@ -237,14 +228,25 @@ object ArtistInfoFetcher {
             Log.e("ArtistInfoFetcher", "Error in Deezer API: ${e.message}")
         }
 
-        // ==================== 2. MUSICBRAINZ API (Music Entity Resolution & Bio) ====================
+        // ==================== 2. WIKIPEDIA 2-STEP WITH ANCHOR TERMS (ArtistBioRepository) ====================
+        try {
+            val wikiBio = ArtistBioRepository.getArtistBiography(canonicalArtistName)
+                ?: ArtistBioRepository.getArtistBiography(artistName)
+            if (!wikiBio.isNullOrBlank()) {
+                bio = wikiBio
+            }
+        } catch (e: Exception) {
+            Log.e("ArtistInfoFetcher", "Error in ArtistBioRepository: ${e.message}")
+        }
+
+        // ==================== 3. MUSICBRAINZ API (Entity Resolution & Origin) ====================
         try {
             val mbResult = fetchMusicBrainzArtistData(canonicalArtistName)
             if (mbResult != null) {
                 if (mbResult.origin.isNotBlank() && mbResult.origin != "Unknown") {
                     origin = mbResult.origin
                 }
-                if (!mbResult.bio.isNullOrBlank()) {
+                if (bio.isNullOrBlank() && !mbResult.bio.isNullOrBlank() && !isNonMusicDefinition(mbResult.bio)) {
                     bio = mbResult.bio
                 }
             }
@@ -252,7 +254,7 @@ object ArtistInfoFetcher {
             Log.e("ArtistInfoFetcher", "Error in MusicBrainz API: ${e.message}")
         }
 
-        // ==================== 3. MUSIC-ACCURATE FALLBACK (Never generic dictionary) ====================
+        // ==================== 4. MUSIC-ACCURATE FALLBACK (Never generic dictionary) ====================
         if (bio.isNullOrBlank() || isNonMusicDefinition(bio)) {
             bio = if (followersStr.isNotEmpty()) {
                 "$canonicalArtistName es un reconocido artista musical en Deezer con más de $followersStr seguidores globales y destacadas canciones en streaming."
@@ -428,14 +430,17 @@ object ArtistInfoFetcher {
      * Guard to prevent non-music dictionary definitions (such as "A tool is a device...")
      */
     private fun isNonMusicDefinition(text: String): Boolean {
-        val lower = text.lowercase()
-        return lower.startsWith("a tool is a device") ||
-                lower.startsWith("tool is a device") ||
-                lower.contains("is a device that is required") ||
-                lower.contains("puede referirse a:") ||
-                lower.contains("may refer to:") ||
-                lower.contains("dispositivo o instrumento que se utiliza") ||
-                lower.contains("herramienta de mano")
+        val lower = text.lowercase().trim()
+        if (lower.startsWith("searched for") || lower.contains("searched for \"")) return true
+        if (lower.contains("puede referirse a:") || lower.contains("may refer to:")) return true
+        if (lower.contains("desambiguación") || lower.contains("disambiguation")) return true
+        if (lower.startsWith("a tool is a device") || lower.startsWith("tool is a device")) return true
+        if (lower.contains("is a device that is required") || lower.contains("herramienta de mano")) return true
+        if (lower.contains("dispositivo o instrumento que se utiliza")) return true
+        if (lower.contains("primer libro de la biblia") || lower.contains("primer libro del pentateuco")) return true
+        if (lower.contains("libro del génesis") || lower.contains("libro de génesis")) return true
+        if (lower.contains("paraje de un desierto") || lower.contains("oasis es un paraje")) return true
+        return false
     }
 
     private fun searchDeezerArtistByTrack(trackTitle: String): String? {
