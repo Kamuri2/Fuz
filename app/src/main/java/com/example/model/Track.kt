@@ -22,15 +22,4 @@ data class Track(
     val lyrics: String = "",
     val isFavorite: Boolean = false,
     val isSample: Boolean = false
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-        other as Track
-        return id == other.id
-    }
-
-    override fun hashCode(): Int {
-        return id.hashCode()
-    }
-}
+)

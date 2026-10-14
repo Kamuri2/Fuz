@@ -51,15 +51,20 @@ import java.io.File
 fun PlayerAlbumArt(
     track: Track,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Fit
 ) {
     val context = LocalContext.current
     val extractor = remember { AlbumArtExtractor(context) }
 
-    // 1. Revisión síncrona inmediata en caché de disco (0 ms de latencia)
-    val initialFile = remember(track.id) { extractor.getExistingArtFile(track) }
+    val albumKey = remember(track.id, track.album, track.artist) {
+        AlbumArtExtractor.getAlbumKey(track) ?: "track_${track.id}"
+    }
 
-    val artFile by produceState<File?>(initialValue = initialFile, key1 = track.id) {
+    // 1. Revisión síncrona inmediata en caché de memoria/disco (0 ms de latencia) para el álbum
+    val initialFile = remember(albumKey) { extractor.getExistingArtFile(track) }
+
+    val artFile by produceState<File?>(initialValue = initialFile, key1 = albumKey) {
+        value = initialFile
         if (value == null) {
             value = withContext(Dispatchers.IO) {
                 extractor.getHighResArt(track)
@@ -67,29 +72,17 @@ fun PlayerAlbumArt(
         }
     }
 
-    val currentModel: Any? = artFile ?: track.albumArtUri ?: if (track.contentUri != Uri.EMPTY) track.contentUri else null
-
-    // Mantiene la imagen previa visible para eliminar por completo el flash entre canciones
-    var displayedModel by remember { mutableStateOf<Any?>(currentModel) }
-    LaunchedEffect(currentModel) {
-        if (currentModel != null) {
-            displayedModel = currentModel
-        }
-    }
-
-    val modelToUse = currentModel ?: displayedModel
-
     Crossfade(
-        targetState = modelToUse,
+        targetState = artFile,
         animationSpec = tween(300),
         modifier = modifier
-    ) { model ->
-        if (model != null) {
+    ) { file ->
+        if (file != null && file.exists()) {
             AsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data(model)
+                    .data(file)
                     .size(CoilSize.ORIGINAL)
-                    .crossfade(300)
+                    .crossfade(200)
                     .build(),
                 contentDescription = "Portada",
                 contentScale = contentScale,
@@ -97,7 +90,11 @@ fun PlayerAlbumArt(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            FallbackMusicIcon(modifier = Modifier.fillMaxSize())
+            FallbackOrExtractImage(
+                track = track,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale
+            )
         }
     }
 }
@@ -109,7 +106,7 @@ fun PlayerAlbumArt(
 fun PlayerAlbumArt(
     audioFile: File,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Fit
 ) {
     val context = LocalContext.current
     val extractor = remember { AlbumArtExtractor(context) }
@@ -182,24 +179,42 @@ fun TrackImage(
 ) {
     val context = LocalContext.current
     val extractor = remember { AlbumArtExtractor(context) }
-    val artFile = remember(track.id) { extractor.getExistingArtFile(track) }
-    val model: Any? = artFile ?: track.albumArtUri ?: if (track.contentUri != Uri.EMPTY) track.contentUri else null
+    val albumKey = remember(track.id, track.album, track.artist) {
+        AlbumArtExtractor.getAlbumKey(track) ?: "track_${track.id}"
+    }
+    val initialFile = remember(albumKey) { extractor.getExistingArtFile(track) }
+    val artFile by produceState<File?>(initialValue = initialFile, key1 = albumKey) {
+        value = initialFile
+        if (value == null) {
+            value = withContext(Dispatchers.IO) {
+                extractor.getHighResArt(track)
+            }
+        }
+    }
 
-    if (model != null) {
+    if (artFile != null && artFile!!.exists()) {
         SubcomposeAsyncImage(
             model = ImageRequest.Builder(context)
-                .data(model)
+                .data(artFile)
                 .crossfade(200)
                 .build(),
             contentDescription = track.title,
             contentScale = contentScale,
             modifier = modifier,
             error = {
-                FallbackMusicIcon(modifier = Modifier.fillMaxSize())
+                FallbackOrExtractImage(
+                    track = track,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = contentScale
+                )
             }
         )
     } else {
-        FallbackMusicIcon(modifier = modifier)
+        FallbackOrExtractImage(
+            track = track,
+            modifier = modifier,
+            contentScale = contentScale
+        )
     }
 }
 

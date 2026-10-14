@@ -1,1 +1,0 @@
-sed -i '/\/\/ 2. Intento nativo de Android como respaldo/i \            if (artworkBytes == null) {\n                artworkBytes = retriever.embeddedPicture\n            }' app/src/main/java/com/example/data/MetadataReader.kt

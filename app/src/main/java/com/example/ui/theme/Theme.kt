@@ -28,11 +28,11 @@ fun LiquidMusicTheme(
             onSecondary = Color.White,
             tertiary = OrangeGlow,
             background = LiquidDarkBg,
-            onBackground = GlassTextPrimary,
+            onBackground = GlassTextPrimaryDark,
             surface = LiquidDarkSurface,
-            onSurface = GlassTextPrimary,
+            onSurface = GlassTextPrimaryDark,
             surfaceVariant = LiquidGlassCard,
-            onSurfaceVariant = GlassTextSecondary,
+            onSurfaceVariant = GlassTextSecondaryDark,
             outline = LiquidGlassBorder
         )
     } else {
@@ -44,13 +44,13 @@ fun LiquidMusicTheme(
             secondary = PurpleAccent,
             onSecondary = Color.White,
             tertiary = OrangeGlow,
-            background = Color(0xFFF0F0F0),
-            onBackground = Color(0xFF1E1E1E),
-            surface = Color.White,
-            onSurface = Color(0xFF1E1E1E),
-            surfaceVariant = Color(0xFFE0E0E0),
-            onSurfaceVariant = Color(0xFF555555),
-            outline = Color(0xFFCCCCCC)
+            background = Color(0xFFF7F7F9),
+            onBackground = Color(0xFF111111),
+            surface = Color(0xFFFFFFFF),
+            onSurface = Color(0xFF111111),
+            surfaceVariant = Color(0xFFEBEBF0),
+            onSurfaceVariant = Color(0xFF4A4A4A),
+            outline = Color(0xFFD1D1D6)
         )
     }
 

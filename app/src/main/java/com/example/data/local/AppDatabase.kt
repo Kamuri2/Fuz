@@ -7,9 +7,23 @@ import androidx.room.RoomDatabase
 import com.example.data.ArtistDao
 import com.example.data.ArtistEntity
 
-@Database(entities = [TrackEntity::class, ArtistEntity::class, UserEntity::class, PlaylistEntity::class, PlaylistTrackCrossRef::class, LikedTrackEntity::class, PlaybackHistoryEntity::class], version = 6, exportSchema = false)
+@Database(
+    entities = [
+        TrackEntity::class,
+        ArtistEntity::class,
+        UserEntity::class,
+        PlaylistEntity::class,
+        PlaylistTrackCrossRef::class,
+        LikedTrackEntity::class,
+        PlaybackHistoryEntity::class,
+        LyricsEntry::class
+    ],
+    version = 8,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
-        abstract fun trackDao(): TrackDao
+    abstract fun trackDao(): TrackDao
+    abstract fun lyricsDao(): LyricsDao
     abstract fun artistDao(): ArtistDao
     abstract fun userDao(): UserDao
     abstract fun playlistDao(): PlaylistDao

@@ -23,6 +23,12 @@ interface TrackDao {
     @Query("UPDATE cached_tracks SET lyrics = :lyrics WHERE id = :id")
     suspend fun updateLyrics(id: Long, lyrics: String)
 
+    @Query("SELECT lyrics FROM cached_tracks WHERE id = :id LIMIT 1")
+    suspend fun getLyricsById(id: Long): String?
+
+    @Query("SELECT lyrics FROM cached_tracks WHERE path = :path LIMIT 1")
+    suspend fun getLyricsByPath(path: String): String?
+
     @Query("DELETE FROM cached_tracks WHERE id NOT IN (:validIds)")
     suspend fun deleteMissing(validIds: List<Long>)
 

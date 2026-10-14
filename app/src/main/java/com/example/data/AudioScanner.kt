@@ -10,6 +10,8 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.example.model.Track
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 object AudioScanner {
@@ -19,8 +21,9 @@ object AudioScanner {
 
     /**
      * Scans all audio files from device MediaStore and common storage locations.
+     * Guaranteed to execute asynchronously on Dispatchers.IO to prevent main thread blocking.
      */
-    fun scanMediaStoreAudio(context: Context): List<Track> {
+    suspend fun scanMediaStoreAudio(context: Context): List<Track> = withContext(Dispatchers.IO) {
         val tracksMap = mutableMapOf<Long, Track>()
         val pathMap = mutableSetOf<String>()
 
@@ -87,7 +90,8 @@ object AudioScanner {
                         val trackNum = if (rawTrackNum >= 1000) rawTrackNum % 1000 else if (rawTrackNum > 0) rawTrackNum else 1
 
                         val contentUri = ContentUris.withAppendedId(collection, id)
-                        val artUri = if (albumId > 0) ContentUris.withAppendedId(artworkUriBase, albumId) else null
+                        // No usar album_id de MediaStore para evitar que canciones de distintos artistas con mismo álbum/título compartan portada
+                        val artUri: Uri? = null
 
                         val fallbackTitle = if (path.isNotBlank()) File(path).nameWithoutExtension else "Track $id"
                         val title = if (!rawTitle.isNullOrBlank() && rawTitle != "<unknown>") rawTitle else fallbackTitle
@@ -158,7 +162,7 @@ object AudioScanner {
             Log.e(TAG, "Error scanning local directories: ${e.message}")
         }
 
-        return tracksMap.values.sortedBy { it.title.lowercase() }
+        tracksMap.values.sortedBy { it.title.lowercase() }
     }
 
     private fun scanLocalDirectory(
@@ -215,17 +219,18 @@ object AudioScanner {
 
     /**
      * Fast, lightweight scan of audio files inside a specific folder tree URI selected via Storage Access Framework (SAF)
+     * Guaranteed to execute asynchronously on Dispatchers.IO to prevent main thread blocking.
      */
-    fun scanFolderUri(context: Context, treeUri: Uri): List<Track> {
+    suspend fun scanFolderUri(context: Context, treeUri: Uri): List<Track> = withContext(Dispatchers.IO) {
         val tracks = mutableListOf<Track>()
         try {
-            val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return emptyList()
+            val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return@withContext emptyList()
             val folderName = rootDoc.name ?: "Custom Folder"
             scanDocumentDirectory(context, rootDoc, folderName, tracks)
         } catch (e: Exception) {
             Log.e(TAG, "Error scanning folder URI: ${e.message}")
         }
-        return tracks
+        tracks
     }
 
     private fun scanDocumentDirectory(

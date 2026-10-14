@@ -14,12 +14,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,8 +82,10 @@ import coil.compose.AsyncImage
 import com.example.ui.components.TrackImage
 import com.example.data.AudioScanner
 
+import android.content.Context
 import com.example.data.UserRepository
 import com.example.data.SocialRepository
+import com.example.ui.components.OnboardingTourOverlay
 import com.example.ui.screens.SetupScreen
 import com.example.ui.screens.UserProfileScreen
 import androidx.compose.runtime.collectAsState
@@ -100,6 +105,7 @@ import com.example.ui.theme.GlassTextMuted
 import com.example.ui.theme.GlassTextPrimary
 import com.example.ui.theme.GlassTextSecondary
 import com.example.ui.theme.LiquidMusicTheme
+import com.example.ui.getDisplayArtist
 
 enum class NavigationScreen {
     HOME, FOLDERS, PLAYLISTS, ALBUMS, ARTISTS, PLAYER, SETTINGS, PROFILE
@@ -122,6 +128,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             LiquidMusicApp(playerManager = playerManager)
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        com.example.data.ArtistInfoFetcher.checkAndSyncWithSystemCache(this)
     }
 
     override fun onDestroy() {
@@ -148,6 +159,9 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
     val socialRepository = remember { SocialRepository.getInstance(context) }
     val userProfile by userRepository.getUserProfile().collectAsState(initial = null)
     
+    val tourPrefs = remember { context.getSharedPreferences("app_guide_prefs", Context.MODE_PRIVATE) }
+    var showTour by remember { mutableStateOf(false) }
+
     var isCheckingUser by remember { mutableStateOf(true) }
     var needsSetup by remember { mutableStateOf(false) }
 
@@ -155,6 +169,11 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         val user = userRepository.getUserProfileSync()
         if (user == null || user.name.isBlank()) {
             needsSetup = true
+        } else {
+            val isTourCompleted = tourPrefs.getBoolean("guide_completed", false)
+            if (!isTourCompleted) {
+                showTour = true
+            }
         }
         isCheckingUser = false
     }
@@ -178,12 +197,18 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         SetupScreen(
             currentLanguage = appSettings.appLanguage,
             onLanguageChange = { playerManager.setAppLanguage(it) },
-            onComplete = { needsSetup = false }
+            onComplete = {
+                needsSetup = false
+                showTour = true
+            }
         )
         return@LiquidMusicTheme
     }
 
         val cachedTracks by com.example.data.TrackRepository.tracks.collectAsState()
+        val isRescanningLibrary by com.example.data.TrackRepository.isRescanning.collectAsState()
+        val isRepairingCovers by com.example.data.TrackRepository.isRepairingCovers.collectAsState()
+        var isClearingCache by remember { mutableStateOf(false) }
         var loadedTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
         var showQueueSheet by remember { mutableStateOf(false) }
 
@@ -191,12 +216,9 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         LaunchedEffect(cachedTracks) {
             if (cachedTracks.isNotEmpty()) {
                 loadedTracks = cachedTracks
-                com.example.data.ArtPreExtractor.startPreExtraction(context, cachedTracks)
                 if (playerManager.playlist.value.isEmpty()) {
                     playerManager.setQueue(cachedTracks, 0, false)
                 }
-            } else {
-                com.example.data.ArtPreExtractor.startPreExtraction(context)
             }
         }
 
@@ -220,26 +242,30 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (e: Exception) {
-                // Ignore persist errors
-            }
-            val folderTracks = AudioScanner.scanFolderUri(context, uri)
-            if (folderTracks.isNotEmpty()) {
-                coroutineScope.launch(Dispatchers.IO) {
+            coroutineScope.launch(Dispatchers.IO) {
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: Exception) {
+                    // Ignore persist errors
+                }
+                val folderTracks = AudioScanner.scanFolderUri(context, uri)
+                if (folderTracks.isNotEmpty()) {
                     val merged = com.example.data.TrackRepository.saveScannedTracks(context, folderTracks)
-                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
                         loadedTracks = merged
                         playerManager.setQueue(merged, 0, false)
-                        Toast.makeText(context, "Se cargaron ${merged.size} canciones", Toast.LENGTH_SHORT).show()
+                        val msg = com.example.ui.Translations.get(appSettings.appLanguage, "folder_songs_loaded").replace("%d", merged.size.toString())
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        val msg = com.example.ui.Translations.get(appSettings.appLanguage, "no_audio_files_found")
+                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                     }
                 }
-            } else {
-                Toast.makeText(context, "No se encontraron archivos de audio en la carpeta", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -255,15 +281,12 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
         coroutineScope.launch(Dispatchers.IO) {
             val deviceTracks = AudioScanner.scanMediaStoreAudio(context)
             if (deviceTracks.isNotEmpty()) {
-                withContext(Dispatchers.Main) {
-                    loadedTracks = deviceTracks
-                    if (playerManager.playlist.value.isEmpty()) {
-                        playerManager.setQueue(deviceTracks, 0, false)
-                    }
-                }
                 val saved = com.example.data.TrackRepository.saveScannedTracks(context, deviceTracks, force)
                 withContext(Dispatchers.Main) {
                     loadedTracks = saved
+                    if (playerManager.playlist.value.isEmpty()) {
+                        playerManager.setQueue(saved, 0, false)
+                    }
                 }
             }
         }
@@ -326,6 +349,8 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                             MiniPlayerBar(
                                 track = currentTrack,
                                 isPlaying = isPlaying,
+                                isDarkMode = appSettings.isDarkMode,
+                                language = appSettings.appLanguage,
                                 onPlayPauseToggle = { playerManager.togglePlayPause() },
                                 onNext = { playerManager.nextTrack() },
                                 onPrevious = { playerManager.previousTrack() },
@@ -450,7 +475,51 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         settings = appSettings,
                         onUpdateSettings = { playerManager.updateSettings(it) },
                         onBack = { currentScreen = NavigationScreen.HOME },
-                        onRescanAudio = { isForceRescan = true; permissionLauncher.launch(requiredPermissions) }
+                        onRescanAudio = { isForceRescan = true; permissionLauncher.launch(requiredPermissions) },
+                        onRepairCovers = {
+                            coroutineScope.launch {
+                                Toast.makeText(
+                                    context,
+                                    com.example.ui.Translations.get(appSettings.appLanguage, "repairing_covers_toast"),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                val repaired = com.example.data.TrackRepository.repairMissingOrCorruptArtwork(context)
+                                val msg = com.example.ui.Translations.get(appSettings.appLanguage, "covers_repaired_toast")
+                                    .replace("%d", repaired.toString())
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onClearCache = {
+                            coroutineScope.launch {
+                                isClearingCache = true
+                                Toast.makeText(
+                                    context,
+                                    com.example.ui.Translations.get(appSettings.appLanguage, "clearing_cache_toast"),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                    com.example.data.ArtistInfoFetcher.clearAllData(context)
+                                    try {
+                                        coil.Coil.imageLoader(context).memoryCache?.clear()
+                                        coil.Coil.imageLoader(context).diskCache?.clear()
+                                    } catch (_: Exception) {}
+                                }
+                                playerManager.refreshCurrentArtistInfo()
+                                isClearingCache = false
+                                Toast.makeText(
+                                    context,
+                                    com.example.ui.Translations.get(appSettings.appLanguage, "cache_cleared_toast"),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        isRescanning = isRescanningLibrary,
+                        isRepairingCovers = isRepairingCovers,
+                        isClearingCache = isClearingCache,
+                        onStartTour = {
+                            currentScreen = NavigationScreen.HOME
+                            showTour = true
+                        }
                     )
                     
                     NavigationScreen.PROFILE -> com.example.ui.screens.UserProfileScreen(
@@ -460,7 +529,8 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                         onPlaylistClick = { playlistName -> 
                             initialPlaylist = playlistName
                             // Do not change currentScreen
-                        }
+                        },
+                        settings = appSettings
                     )
     
                     else -> {}
@@ -535,59 +605,59 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
 
         androidx.compose.animation.AnimatedVisibility(
             visible = isPlayerExpanded,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = tween(240, easing = FastOutSlowInEasing)
+            ) + fadeIn(animationSpec = tween(180)),
+            exit = fadeOut(animationSpec = tween(150)),
             modifier = Modifier.fillMaxSize()
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black)
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) {}
-            ) {
-                PlayerScreen(
-                    settings = appSettings,
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    currentPositionMs = currentPositionMs,
-                    durationMs = durationMs,
-                    isShuffle = isShuffle,
-                    loopMode = loopMode,
-                    isFavorite = currentTrack?.let { favorites.contains(it.id) } ?: false,
-                    isDisliked = currentTrack?.let { dislikedTracks.contains(it.id) } ?: false,
-                    playlists = dbPlaylists,
-                    onPlayPauseToggle = { playerManager.togglePlayPause() },
-                    onNext = { playerManager.nextTrack() },
-                    onPrevious = { playerManager.previousTrack() },
-                    onSeek = { playerManager.seekTo(it) },
-                    onShuffleToggle = { playerManager.toggleShuffle() },
-                    onLoopCycle = { playerManager.cycleLoopMode() },
-                    onFavoriteToggle = { currentTrack?.let { playerManager.toggleFavorite(it.id) } },
-                    onDislikeToggle = { currentTrack?.let { playerManager.toggleDislike(it.id) } },
-                    onOpenQueue = { showQueueSheet = true },
-                    onAddToPlaylist = { playlistId ->
-                        currentTrack?.let { track ->
-                            coroutineScope.launch {
-                                socialRepository.addTrackToPlaylist(playlistId, track.id)
-                                Toast.makeText(context, "Canción agregada a la playlist", Toast.LENGTH_SHORT).show()
-                            }
+            PlayerScreen(
+                settings = appSettings,
+                currentTrack = currentTrack,
+                isPlaying = isPlaying,
+                currentPositionMs = currentPositionMs,
+                durationMs = durationMs,
+                isShuffle = isShuffle,
+                loopMode = loopMode,
+                isFavorite = currentTrack?.let { favorites.contains(it.id) } ?: false,
+                isDisliked = currentTrack?.let { dislikedTracks.contains(it.id) } ?: false,
+                playlists = dbPlaylists,
+                onPlayPauseToggle = { playerManager.togglePlayPause() },
+                onNext = { playerManager.nextTrack() },
+                onPrevious = { playerManager.previousTrack() },
+                onSeek = { playerManager.seekTo(it) },
+                onShuffleToggle = { playerManager.toggleShuffle() },
+                onLoopCycle = { playerManager.cycleLoopMode() },
+                onFavoriteToggle = { currentTrack?.let { playerManager.toggleFavorite(it.id) } },
+                onDislikeToggle = { currentTrack?.let { playerManager.toggleDislike(it.id) } },
+                onOpenQueue = { showQueueSheet = true },
+                onAddToPlaylist = { playlistId ->
+                    currentTrack?.let { track ->
+                        coroutineScope.launch {
+                            socialRepository.addTrackToPlaylist(playlistId, track.id)
+                            val msg = com.example.ui.Translations.get(appSettings.appLanguage, "song_added_to_playlist")
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         }
-                    },
-                    onCreatePlaylistAndAdd = { name ->
-                        currentTrack?.let { track ->
-                            coroutineScope.launch {
-                                val newId = socialRepository.createPlaylist(name)
-                                socialRepository.addTrackToPlaylist(newId, track.id)
-                                Toast.makeText(context, "Playlist '$name' creada", Toast.LENGTH_SHORT).show()
-                            }
+                    }
+                },
+                onCreatePlaylistAndAdd = { name ->
+                    currentTrack?.let { track ->
+                        coroutineScope.launch {
+                            val newId = socialRepository.createPlaylist(name)
+                            socialRepository.addTrackToPlaylist(newId, track.id)
+                            val msg = com.example.ui.Translations.get(appSettings.appLanguage, "playlist_created_format").replace("%s", name)
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         }
-                    },
-                    onBack = { isPlayerExpanded = false }
-                )
-            }
+                    }
+                },
+                onNavigateToArtist = { artistName ->
+                    initialArtist = artistName
+                    currentScreen = NavigationScreen.ARTISTS
+                    isPlayerExpanded = false
+                },
+                onBack = { isPlayerExpanded = false }
+            )
         }
         } // End of Box wrapping Scaffold
 
@@ -603,7 +673,21 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
                 onRemoveFromQueue = { idx -> playerManager.removeFromQueue(idx) },
                 onSetPlayNext = { track -> playerManager.setPlayNext(track) },
                 onMoveInQueue = { from, to -> playerManager.moveInQueue(from, to) },
-                language = appSettings.appLanguage
+                isShuffle = isShuffle,
+                loopMode = loopMode,
+                onShuffleToggle = { playerManager.toggleShuffle() },
+                onLoopCycle = { playerManager.cycleLoopMode() },
+                language = appSettings.appLanguage,
+                isDarkMode = appSettings.isDarkMode
+            )
+        }
+
+        if (showTour && !isPlayerExpanded) {
+            OnboardingTourOverlay(
+                language = appSettings.appLanguage,
+                isDarkMode = appSettings.isDarkMode,
+                primaryColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                onTourFinished = { showTour = false }
             )
         }
     }
@@ -613,6 +697,8 @@ fun LiquidMusicApp(playerManager: AudioPlayerManager) {
 fun MiniPlayerBar(
     track: Track?,
     isPlaying: Boolean,
+    isDarkMode: Boolean = true,
+    language: String = "English",
     onPlayPauseToggle: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -620,14 +706,19 @@ fun MiniPlayerBar(
 ) {
     if (track == null) return
 
-    val artworkBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
+    val titleColor = if (isDarkMode) Color.White else Color(0xFF1E1E1E)
+    val artistColor = if (isDarkMode) GlassTextSecondary else Color(0xFF666666)
+    val iconTint = if (isDarkMode) Color.White else Color(0xFF1E1E1E)
+    val cardBg = if (isDarkMode) Color(0x26FFFFFF) else Color(0xFFFFFFFF)
+    val cardBorder = if (isDarkMode) Color(0x33FFFFFF) else Color(0x1F000000)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0x1AFFFFFF))
+            .background(cardBg)
+            .border(1.dp, cardBorder, RoundedCornerShape(20.dp))
             .clickable { onClick() }
             .padding(8.dp)
             .testTag("mini_player_bar")
@@ -640,14 +731,10 @@ fun MiniPlayerBar(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0x2AFFFFFF)),
+                    .background(if (isDarkMode) Color(0x2AFFFFFF) else Color(0x0F000000)),
                 contentAlignment = Alignment.Center
             ) {
-                when {
-                    artworkBitmap != null -> Image(bitmap = artworkBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    true -> TrackImage(track = track, modifier = Modifier.fillMaxSize())
-                    else -> Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
+                TrackImage(track = track, modifier = Modifier.fillMaxSize())
             }
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -657,21 +744,21 @@ fun MiniPlayerBar(
                     text = track.title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = titleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = track.artist,
+                    text = track.getDisplayArtist(language),
                     fontSize = 12.sp,
-                    color = GlassTextSecondary,
+                    color = artistColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
             IconButton(onClick = onPrevious) {
-                Icon(imageVector = Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(imageVector = Icons.Default.SkipPrevious, contentDescription = "Previous", tint = iconTint, modifier = Modifier.size(22.dp))
             }
 
             // Play/Pause Button
@@ -684,13 +771,13 @@ fun MiniPlayerBar(
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = "Play/Pause",
-                    tint = Color.White,
+                    tint = iconTint,
                     modifier = Modifier.size(32.dp)
                 )
             }
 
             IconButton(onClick = onNext) {
-                Icon(imageVector = Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(imageVector = Icons.Default.SkipNext, contentDescription = "Next", tint = iconTint, modifier = Modifier.size(22.dp))
             }
         }
     }
@@ -702,10 +789,15 @@ fun FiveTabBottomNavBar(
     currentScreen: NavigationScreen,
     onScreenSelect: (NavigationScreen) -> Unit
 ) {
+    val isDark = appSettings.isDarkMode
+    val navBg = if (isDark) Color(0xFF0F0F0F) else Color(0xFFFFFFFF)
+    val navBorder = if (isDark) Color(0x1AFFFFFF) else Color(0x1F000000)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF0F0F0F))
+            .background(navBg)
+            .border(width = 0.5.dp, color = navBorder)
             .padding(vertical = 6.dp)
     ) {
         Row(
@@ -717,6 +809,8 @@ fun FiveTabBottomNavBar(
                 label = com.example.ui.Translations.get(appSettings.appLanguage, "home"),
                 icon = Icons.Default.Home,
                 isSelected = currentScreen == NavigationScreen.HOME,
+                isDarkMode = isDark,
+                primaryColor = appSettings.selectedTheme.primaryColor,
                 onClick = { onScreenSelect(NavigationScreen.HOME) },
                 testTag = "nav_home"
             )
@@ -724,6 +818,8 @@ fun FiveTabBottomNavBar(
                 label = com.example.ui.Translations.get(appSettings.appLanguage, "folders"),
                 icon = Icons.Default.Folder,
                 isSelected = currentScreen == NavigationScreen.FOLDERS,
+                isDarkMode = isDark,
+                primaryColor = appSettings.selectedTheme.primaryColor,
                 onClick = { onScreenSelect(NavigationScreen.FOLDERS) },
                 testTag = "nav_folders"
             )
@@ -731,6 +827,8 @@ fun FiveTabBottomNavBar(
                 label = com.example.ui.Translations.get(appSettings.appLanguage, "playlists"),
                 icon = Icons.Default.PlaylistPlay,
                 isSelected = currentScreen == NavigationScreen.PLAYLISTS,
+                isDarkMode = isDark,
+                primaryColor = appSettings.selectedTheme.primaryColor,
                 onClick = { onScreenSelect(NavigationScreen.PLAYLISTS) },
                 testTag = "nav_playlists"
             )
@@ -738,6 +836,8 @@ fun FiveTabBottomNavBar(
                 label = com.example.ui.Translations.get(appSettings.appLanguage, "albums"),
                 icon = Icons.Default.Album,
                 isSelected = currentScreen == NavigationScreen.ALBUMS,
+                isDarkMode = isDark,
+                primaryColor = appSettings.selectedTheme.primaryColor,
                 onClick = { onScreenSelect(NavigationScreen.ALBUMS) },
                 testTag = "nav_albums"
             )
@@ -745,6 +845,8 @@ fun FiveTabBottomNavBar(
                 label = com.example.ui.Translations.get(appSettings.appLanguage, "artists"),
                 icon = Icons.Default.Person,
                 isSelected = currentScreen == NavigationScreen.ARTISTS,
+                isDarkMode = isDark,
+                primaryColor = appSettings.selectedTheme.primaryColor,
                 onClick = { onScreenSelect(NavigationScreen.ARTISTS) },
                 testTag = "nav_artists"
             )
@@ -757,9 +859,15 @@ private fun NavItem5(
     label: String,
     icon: ImageVector,
     isSelected: Boolean,
+    isDarkMode: Boolean,
+    primaryColor: Color,
     onClick: () -> Unit,
     testTag: String
 ) {
+    val selectedColor = primaryColor
+    val unselectedColor = if (isDarkMode) Color.Gray else Color(0xFF757575)
+    val selectedBg = if (isDarkMode) Color(0xFF262626) else primaryColor.copy(alpha = 0.14f)
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -770,14 +878,14 @@ private fun NavItem5(
         Box(
             modifier = Modifier
                 .clip(CircleShape)
-                .background(if (isSelected) Color(0xFF262626) else Color.Transparent)
+                .background(if (isSelected) selectedBg else Color.Transparent)
                 .padding(8.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isSelected) Color.White else Color.Gray,
+                tint = if (isSelected) selectedColor else unselectedColor,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -785,7 +893,7 @@ private fun NavItem5(
             text = label,
             fontSize = 11.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) Color.White else Color.Gray
+            color = if (isSelected) selectedColor else unselectedColor
         )
     }
 }
